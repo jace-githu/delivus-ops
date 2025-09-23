@@ -271,10 +271,10 @@
   </div>
 
   <!-- 카카오맵 API -->
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=961ad1fa29e637215fcfab22903bfbb5&libraries=services"></script>
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=961ad1fa29e637215fcfab22903bfbb5&libraries=services"></script>
   
   <script>
-    // === Apps Script Web App Endpoint ===
+    // === Apps Script API (Google Sheets 저장소) ===
     const PINS_API = 'https://script.google.com/macros/s/AKfycbzsbM_4tZZ5yZ5TXGLHyOe5Q6ktIv9RWO50_Nl2pj5uEIJFMgLZ9vCSobCX0vnc3XDrFg/exec';
 
     // --- Data Storage ---
@@ -289,12 +289,11 @@
     let waypointMode = 'auto';
     let polyline = null;
 
-    // --- Load team pins from Google Sheets (via Apps Script) ---
-    async function loadFromPublicGist() {
-      // 함수명은 그대로 유지(기존 코드 호환)하되, 내부 구현만 시트 연동으로 교체
+    // --- Load pins from Google Sheets via Apps Script ---
+    async function loadFromSheet() {
       updateSyncStatus('syncing', '팀 데이터 로드 중...');
       try {
-        const res = await fetch(`${PINS_API}?action=list`, { method: 'GET' });
+        const res = await fetch(PINS_API + '?action=list', { method: 'GET' });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         savedLocations = data.locations || [];
@@ -302,8 +301,8 @@
         renderSavedLocations();
         updateLocationDropdowns();
         displaySavedLocationMarkers();
-      } catch (error) {
-        console.error('Pins load error:', error);
+      } catch (err) {
+        console.error('Sheet 로드 오류:', err);
         updateSyncStatus('error', '팀 공유 데이터 로드 실패');
       }
     }
@@ -316,9 +315,9 @@
       let icon = '📋';
       switch(status) {
         case 'syncing': icon = '🔄'; break;
-        case 'synced':  icon = '✅'; setTimeout(()=> syncStatus.style.display='none', 3000); break;
+        case 'synced':  icon = '✅'; setTimeout(()=>{ syncStatus.style.display='none'; }, 3000); break;
         case 'error':   icon = '❌'; break;
-        case 'info':    icon = 'ℹ️'; setTimeout(()=> syncStatus.style.display='none', 5000); break;
+        case 'info':    icon = 'ℹ️'; setTimeout(()=>{ syncStatus.style.display='none'; }, 5000); break;
       }
       syncStatus.innerHTML = `<span>${icon}</span><span>${text}</span>`;
     }
@@ -346,9 +345,8 @@
         });
 
         console.log('카카오맵 초기화 완료');
-
-        // 팀 데이터 로드(시트)
-        loadFromPublicGist();
+        // 팀 데이터 로드
+        loadFromSheet();
 
       } catch (error) {
         console.error('카카오맵 초기화 오류:', error);
@@ -475,7 +473,7 @@
       saveLocationBtn.disabled = false;
     });
 
-    // --- Save Location to Google Sheets (via Apps Script) ---
+    // --- Save Location to Google Sheets via Apps Script ---
     saveLocationBtn.addEventListener('click', saveLocationToTeam);
 
     async function saveLocationToTeam() {
@@ -483,21 +481,22 @@
         alert('먼저 검색 후 지점을 선택하세요.');
         return;
       }
+      // x-www-form-urlencoded 로 전송 (프리플라이트 회피)
       const form = new URLSearchParams();
       form.set('name', currentSearchResult.name);
       form.set('lat', String(currentSearchResult.lat));
       form.set('lng', String(currentSearchResult.lng));
-      form.set('createdBy', '공용'); // 필요 시 사용자 식별 로직 대체
+      form.set('createdBy', '공용');
 
       try {
         const res = await fetch(PINS_API, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, // 프리플라이트 회피
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: form.toString()
         });
         if (!res.ok) throw new Error(await res.text());
         updateSyncStatus('synced', '팀 위치가 저장되었습니다. 🔄 버튼으로 갱신하세요.');
-        saveLocationBtn.disabled = true; // 중복 클릭 방지
+        saveLocationBtn.disabled = true;
       } catch (e) {
         console.error('저장 오류:', e);
         updateSyncStatus('error', '저장 실패: 잠시 후 다시 시도해주세요.');
@@ -575,3 +574,240 @@
     document.getElementById('endSelect').addEventListener('change', updateRoute);
 
     function updateRoute() {
+      const startId = document.getElementById('startSelect').value;
+      const endId = document.getElementById('endSelect').value;
+      if (!startId || !endId) return;
+      const start = savedLocations.find(loc => loc.id === startId);
+      const end = savedLocations.find(loc => loc.id === endId);
+      if (start && end && map) {
+        resetRoute();
+        addWaypoint(new kakao.maps.LatLng(start.lat, start.lng), start.name);
+        addWaypoint(new kakao.maps.LatLng(end.lat, end.lng), end.name);
+      }
+    }
+
+    function addWaypoint(latlng, customName = null) {
+      waypoints.push(latlng);
+      if (map) {
+        const marker = new kakao.maps.Marker({ position: latlng, map: map });
+        const label = customName || ((waypoints.length === 1) ? '출발' : (waypoints.length === 2) ? '도착' : ('경유 ' + (waypoints.length-2)));
+        const color = waypoints.length === 1 ? '#22c55e' : waypoints.length === 2 ? '#ef4444' : '#f59e0b';
+        const overlay = new kakao.maps.CustomOverlay({
+          position: latlng,
+          content: `<div style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; white-space: nowrap;">${label}</div>`,
+          yAnchor: 2, xAnchor: 0.5
+        });
+        overlay.setMap(map);
+        markers.push({ marker, overlay });
+      }
+      if (waypoints.length >= 2) calculateRoute();
+      renderWpList();
+    }
+
+    function calculateRoute() {
+      if (waypoints.length < 2) return;
+      let totalDistance = 0;
+      const path = [];
+      for (let i = 0; i < waypoints.length; i++) {
+        path.push(waypoints[i]);
+        if (i > 0) {
+          const prevLatLng = waypoints[i-1];
+          const currLatLng = waypoints[i];
+          const distance = getDistanceFromLatLonInKm(
+            prevLatLng.getLat(), prevLatLng.getLng(),
+            currLatLng.getLat(), currLatLng.getLng()
+          );
+          totalDistance += distance;
+        }
+      }
+      if (polyline) polyline.setMap(null);
+      if (map) {
+        polyline = new kakao.maps.Polyline({
+          path: path, strokeWeight: 6, strokeColor: '#6366f1', strokeOpacity: 0.8
+        });
+        polyline.setMap(map);
+      }
+      const roadFactor = getNumber('roadFactor');
+      const adjustedDistance = totalDistance * roadFactor;
+      document.getElementById('km').textContent = adjustedDistance.toFixed(1);
+      renderCost();
+    }
+
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = deg2rad(lat2-lat1);
+      const dLon = deg2rad(lon2-lon1); 
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+      const d = R * c;
+      return d;
+    }
+    function deg2rad(deg) { return deg * (Math.PI/180); }
+
+    function resetRoute() {
+      waypoints = [];
+      markers.forEach(m => {
+        if (m.marker) m.marker.setMap(null);
+        if (m.overlay) m.overlay.setMap(null);
+      });
+      markers = [];
+      if (polyline) { polyline.setMap(null); polyline = null; }
+      document.getElementById('km').textContent = '0.0';
+      waypointMode = 'auto';
+      updateAddWaypointButton();
+      renderWpList();
+      renderCost();
+    }
+
+    function updateAddWaypointButton() {
+      const btn = document.getElementById('addWaypointBtn');
+      if (waypointMode === 'waypoint') {
+        btn.textContent = '지도 클릭하여 경유지 추가';
+        btn.classList.add('warning');
+      } else {
+        btn.textContent = '경유지 추가';
+        btn.classList.remove('warning');
+      }
+    }
+
+    document.getElementById('addWaypointBtn').addEventListener('click', () => {
+      if (waypoints.length < 2) { alert('먼저 출발지와 도착지를 설정해주세요.'); return; }
+      waypointMode = 'waypoint';
+      updateAddWaypointButton();
+    });
+
+    document.getElementById('undoBtn').addEventListener('click', () => {
+      if (waypoints.length === 0) return;
+      const m = markers.pop();
+      if (m) {
+        if (m.marker) m.marker.setMap(null);
+        if (m.overlay) m.overlay.setMap(null);
+      }
+      waypoints.pop();
+      if (waypoints.length >= 2) calculateRoute();
+      else if (polyline) { polyline.setMap(null); polyline = null; }
+      waypointMode = 'auto';
+      updateAddWaypointButton();
+      renderWpList();
+      renderCost();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      resetRoute();
+      document.getElementById('startSelect').value = '';
+      document.getElementById('endSelect').value = '';
+    });
+
+    async function renderWpList() {
+      const el = document.getElementById('wpList');
+      if (waypoints.length === 0) {
+        el.textContent = '경로를 설정하면 여기에 순서가 표시됩니다.';
+        renderSlack();
+        return;
+      }
+      const names = await Promise.all(waypoints.map((latlng, idx) => reverseName(latlng, idx)));
+      el.innerHTML = names.map((n,i)=> `<div>${i===0?'출발':(i===1?'도착':'경유 '+(i-1))}: <code>${n}</code></div>`).join('');
+      renderSlack(names);
+    }
+
+    async function reverseName(latlng, idx) {
+      return new Promise((resolve) => {
+        if (!geocoder) {
+          resolve(`${latlng.getLat().toFixed(5)}, ${latlng.getLng().toFixed(5)}`);
+          return;
+        }
+        geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result, status) => {
+          if (status === kakao.maps.services.Status.OK) {
+            const address = result[0];
+            if (address.road_address) resolve(address.road_address.address_name);
+            else if (address.address) resolve(address.address.address_name);
+            else resolve(`${latlng.getLat().toFixed(5)}, ${latlng.getLng().toFixed(5)}`);
+          } else {
+            resolve(`${latlng.getLat().toFixed(5)}, ${latlng.getLng().toFixed(5)}`);
+          }
+        });
+      });
+    }
+
+    function getNumber(id) { return Math.max(0, Number(document.getElementById(id).value || 0)); }
+
+    function calcCost(km) {
+      const base = getNumber('baseFee');
+      const perKm = getNumber('perKm');
+      const perStop = getNumber('perStop');
+      const minFee = getNumber('minFee');
+      const extraStops = Math.max(0, waypoints.length - 2);
+      let cost = base + (km * perKm) + (extraStops * perStop);
+      if (minFee > 0) cost = Math.max(cost, minFee);
+      cost = Math.round(cost / 10) * 10;
+      return cost;
+    }
+
+    function renderCost() {
+      const km = Number(document.getElementById('km').textContent) || 0;
+      const cost = calcCost(km);
+      document.getElementById('cost').textContent = cost.toLocaleString('ko-KR');
+      renderSlack();
+    }
+
+    function renderSlack(namesOpt) {
+      const km = Number(document.getElementById('km').textContent) || 0;
+      const cost = calcCost(km);
+      const perKm = getNumber('perKm');
+      const base = getNumber('baseFee');
+      const perStop = getNumber('perStop');
+      const minFee = getNumber('minFee');
+      const roadFactor = getNumber('roadFactor');
+
+      let routeText = '';
+      if (namesOpt && namesOpt.length > 0) {
+        routeText = namesOpt.map((n,i)=> (i===0?'출발':(i===1?'도착':'경유'+(i-1))) + ': ' + n).join(' → ');
+      } else {
+        routeText = waypoints.map((w,i)=> (i===0?'출발':(i===1?'도착':'경유'+(i-1)))).join(' → ');
+      }
+
+      const details = [
+        `📍 노선: ${routeText || '경로 미설정'}`,
+        `📏 총 거리: ${km.toFixed(1)} km (보정계수 ${roadFactor})`,
+        `💰 단가 모델: 기본 ${base.toLocaleString('ko-KR')}원 + (km × ${perKm.toLocaleString('ko-KR')}원) + (경유 ${perStop.toLocaleString('ko-KR')}원/개)${minFee>0?` / 최소 ${minFee.toLocaleString('ko-KR')}원`:''}`,
+        `💸 예상 간선비: ${cost.toLocaleString('ko-KR')}원`
+      ].join('\n');
+      document.getElementById('slackText').textContent = details;
+    }
+
+    document.getElementById('copyBtn').addEventListener('click', () => {
+      const text = document.getElementById('slackText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('copyBtn').textContent = '복사됨 ✅';
+        setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1200);
+      }).catch(() => {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        document.getElementById('copyBtn').textContent = '복사됨 ✅';
+        setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1200);
+      });
+    });
+
+    // --- Event Listeners ---
+    ['baseFee','perKm','perStop','minFee','roadFactor'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderCost);
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      loadFromSheet();
+    });
+
+    // 초기 렌더링
+    renderSavedLocations();
+    renderSlack();
+    updateAddWaypointButton();
+  </script>
+</body>
+</html>
