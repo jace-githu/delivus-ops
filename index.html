@@ -120,10 +120,10 @@
         <input type="text" id="searchInput" placeholder="예: 강남역, 서울시 강남구 테헤란로 152">
         <div class="search-results" id="searchResults" style="display: none;"></div>
       </div>
-      <div class="hint">검색 후 결과를 클릭하면 지도에 🔍으로 표시됩니다. 저장 버튼을 눌러 위치를 영구 저장하세요.</div>
+      <div class="hint">검색 후 결과를 클릭하면 지도에 표시됩니다. 저장 버튼을 눌러 위치를 영구 저장하세요.</div>
       
       <div class="control">
-        <button class="btn success" id="saveLocationBtn" disabled>📍 현재 위치 저장</button>
+        <button class="btn success" id="saveLocationBtn" disabled>현재 위치 저장</button>
       </div>
 
       <h3>저장된 위치</h3>
@@ -209,7 +209,7 @@
     </section>
   </div>
 
-  <!-- 카카오맵 API 로드 -->
+  <!-- 카카오맵 API 로드 - 기본 방식으로 복원 -->
   <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=961ad1fa29e637215fcfab22903bfbb5&libraries=services"></script>
   
   <script>
@@ -227,39 +227,37 @@
 
     // 카카오맵 초기화
     function initMap() {
-      const container = document.getElementById('map');
-      const options = {
-        center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울 중심
-        level: 8
-      };
+      try {
+        const container = document.getElementById('map');
+        const options = {
+          center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울 중심
+          level: 8
+        };
 
-      map = new kakao.maps.Map(container, options);
-      ps = new kakao.maps.services.Places(); // 장소 검색 서비스
-      geocoder = new kakao.maps.services.Geocoder(); // 좌표-주소 변환 서비스
+        map = new kakao.maps.Map(container, options);
+        ps = new kakao.maps.services.Places(); // 장소 검색 서비스
+        geocoder = new kakao.maps.services.Geocoder(); // 좌표-주소 변환 서비스
 
-      // 지도 클릭 이벤트
-      kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-        const latlng = mouseEvent.latLng;
-        
-        if (waypointMode === 'waypoint') {
-          if (waypoints.length >= 2) {
-            addWaypoint(latlng);
-            waypointMode = 'auto';
-            updateAddWaypointButton();
+        // 지도 클릭 이벤트
+        kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+          const latlng = mouseEvent.latLng;
+          
+          if (waypointMode === 'waypoint') {
+            if (waypoints.length >= 2) {
+              addWaypoint(latlng);
+              waypointMode = 'auto';
+              updateAddWaypointButton();
+            }
+          } else {
+            if (waypoints.length < 2) {
+              addWaypoint(latlng);
+            }
           }
-        } else {
-          if (waypoints.length < 2) {
-            addWaypoint(latlng);
-          }
-        }
-      });
-    }
+        });
 
-    // DOM이 로드된 후 초기화
-    window.addEventListener('DOMContentLoaded', function() {
-      if (typeof kakao !== 'undefined' && kakao.maps) {
-        initMap();
-      } else {
+        console.log('카카오맵 및 검색 서비스 초기화 완료');
+      } catch (error) {
+        console.error('카카오맵 초기화 오류:', error);
         document.getElementById('map').innerHTML = `
           <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666;">
             <p style="font-size: 16px; margin-bottom: 10px;">⚠️ 카카오맵 API 로드 실패</p>
@@ -269,6 +267,31 @@
             </p>
           </div>
         `;
+      }
+    }
+
+    // DOM이 로드된 후 초기화
+    window.addEventListener('DOMContentLoaded', function() {
+      if (typeof kakao !== 'undefined' && kakao.maps) {
+        initMap();
+      } else {
+        // 스크립트 로딩을 기다림
+        let attempts = 0;
+        const checkInterval = setInterval(() => {
+          attempts++;
+          if (typeof kakao !== 'undefined' && kakao.maps) {
+            clearInterval(checkInterval);
+            initMap();
+          } else if (attempts > 50) { // 5초 후 포기
+            clearInterval(checkInterval);
+            document.getElementById('map').innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666;">
+                <p style="font-size: 16px; margin-bottom: 10px;">⚠️ 카카오맵 API 로드 실패</p>
+                <p style="font-size: 14px; text-align: center;">네트워크 연결을 확인하고 페이지를 새로고침해주세요.</p>
+              </div>
+            `;
+          }
+        }, 100);
       }
     });
 
@@ -298,17 +321,33 @@
     });
 
     function searchLocation(query) {
-      if (!ps) return;
+      if (!ps) {
+        console.error('Places 서비스가 초기화되지 않음');
+        searchResults.innerHTML = '<div class="search-result">검색 서비스를 초기화하는 중입니다. 잠시 후 다시 시도해주세요.</div>';
+        searchResults.style.display = 'block';
+        return;
+      }
+
+      console.log('검색 시작:', query);
 
       ps.keywordSearch(query, function(data, status) {
+        console.log('검색 결과:', status, data);
+        
         if (status === kakao.maps.services.Status.OK) {
           displaySearchResults(data.slice(0, 5)); // 상위 5개 결과만 표시
+        } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
+          searchResults.innerHTML = '<div class="search-result">검색 결과가 없습니다. 다른 키워드로 시도해보세요.</div>';
+          searchResults.style.display = 'block';
+        } else if (status === kakao.maps.services.Status.ERROR) {
+          searchResults.innerHTML = '<div class="search-result">검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>';
+          searchResults.style.display = 'block';
         } else {
-          searchResults.innerHTML = '<div class="search-result">검색 결과가 없습니다.</div>';
+          console.error('예상치 못한 상태:', status);
+          searchResults.innerHTML = '<div class="search-result">알 수 없는 오류가 발생했습니다.</div>';
           searchResults.style.display = 'block';
         }
       }, {
-        location: map.getCenter(), // 현재 지도 중심 기준 검색
+        location: map ? map.getCenter() : new kakao.maps.LatLng(37.5665, 126.9780), // 현재 지도 중심 기준 검색
         radius: 50000 // 50km 반경
       });
     }
