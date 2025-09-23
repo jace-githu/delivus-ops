@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>딜리래빗 간선비용 계산기</title>
+  <title>딜리래빗 간선비용 계산기 (팀 공유)</title>
   
   <style>
     :root {
@@ -77,6 +77,7 @@
       font-size: 13px;
     }
     .saved-location .name { font-weight: 500; }
+    .saved-location .info { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .saved-location .actions { display: flex; gap: 4px; }
     .saved-location .btn { padding: 4px 8px; font-size: 11px; }
     
@@ -89,6 +90,20 @@
       font-size: 13px; 
       background: white;
     }
+
+    .sync-status {
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sync-status.syncing { background: #fef3c7; color: #92400e; }
+    .sync-status.synced { background: #d1fae5; color: #166534; }
+    .sync-status.error { background: #fee2e2; color: #dc2626; }
+    .sync-status.info { background: #dbeafe; color: #1e40af; }
 
     .loading-state {
       display: flex; 
@@ -110,6 +125,16 @@
       100% { transform: rotate(360deg); }
     }
 
+    .distance-note {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #92400e;
+    }
+
     @media (max-width: 768px) {
       .container {
         grid-template-columns: 1fr;
@@ -128,25 +153,30 @@
 </head>
 <body>
   <header>
-    <div class="title">딜리래빗 간선비용 계산기 (카카오맵)</div>
+    <div class="title">딜리래빗 간선비용 계산기 (팀 공유)</div>
   </header>
 
   <div class="container">
     <!-- Left Controls -->
     <section class="panel" id="panel">
+      <div id="syncStatus" class="sync-status info">
+        <span>📋</span>
+        <span>팀 공유 위치 자동 로드 중...</span>
+      </div>
+
       <h3>위치 검색 및 저장</h3>
       <div class="control search-container">
         <label>위치 검색 (주소, 건물명, 랜드마크 등)</label>
         <input type="text" id="searchInput" placeholder="예: 강남역, 서울시 강남구 테헤란로 152">
         <div class="search-results" id="searchResults" style="display: none;"></div>
       </div>
-      <div class="hint">검색 후 결과를 클릭하면 지도에 표시됩니다. 저장 버튼을 눌러 위치를 영구 저장하세요.</div>
+      <div class="hint">검색 후 결과를 클릭하면 지도에 표시됩니다. 저장하면 모든 팀원이 볼 수 있습니다.</div>
       
       <div class="control">
-        <button class="btn success" id="saveLocationBtn" disabled>현재 위치 저장</button>
+        <button class="btn success" id="saveLocationBtn" disabled>위치 저장 및 팀 공유</button>
       </div>
 
-      <h3>저장된 위치</h3>
+      <h3>팀 공유 위치 <button class="btn" id="refreshBtn" style="padding: 4px 8px; font-size: 11px;">🔄</button></h3>
       <div class="saved-locations" id="savedLocations">
         <div class="hint">저장된 위치가 없습니다.</div>
       </div>
@@ -196,6 +226,12 @@
           <input type="number" id="perStop" value="0" min="0" step="100">
         </div>
         <div class="control">
+          <label>도로거리 보정계수</label>
+          <input type="number" id="roadFactor" value="1.3" min="1" max="2" step="0.1">
+        </div>
+      </div>
+      <div class="row">
+        <div class="control">
           <label>최소 요금(₩, 선택)</label>
           <input type="number" id="minFee" value="0" min="0" step="100">
         </div>
@@ -203,13 +239,18 @@
 
       <div class="kpi">
         <div class="card">
-          <div class="label">총 거리</div>
+          <div class="label">총 거리 (보정 후)</div>
           <div class="value"><span id="km">0.0</span> km</div>
         </div>
         <div class="card">
           <div class="label">예상 간선비</div>
           <div class="value">₩ <span id="cost">0</span></div>
         </div>
+      </div>
+
+      <div class="distance-note">
+        <strong>거리 계산 방식:</strong> 직선거리 × 도로거리 보정계수<br>
+        보정계수 1.3은 일반적인 도시 도로의 우회율을 반영합니다.
       </div>
 
       <h3>경유지</h3>
@@ -229,10 +270,14 @@
     </section>
   </div>
 
-  <!-- 여기에 실제 API 키를 입력하세요 -->
+  <!-- 카카오맵 API -->
   <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=961ad1fa29e637215fcfab22903bfbb5&libraries=services"></script>
   
   <script>
+    // --- Public Gist Configuration ---
+    const PUBLIC_GIST_ID = 'a1b2c3d4e5f6g7h8i9j0'; // 실제 Public Gist ID로 교체하세요
+    const PUBLIC_GIST_URL = `https://api.github.com/gists/${PUBLIC_GIST_ID}`;
+
     // --- Data Storage ---
     let savedLocations = [];
     let currentSearchResult = null;
@@ -244,6 +289,74 @@
     let savedLocationMarkers = new Map();
     let waypointMode = 'auto';
     let polyline = null;
+
+    // --- GitHub Gist Functions (Read-only) ---
+    async function loadFromPublicGist() {
+      updateSyncStatus('syncing', '팀 데이터 로드 중...');
+
+      try {
+        const response = await fetch(PUBLIC_GIST_URL, {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+
+        if (response.ok) {
+          const gistData = await response.json();
+          
+          if (gistData.files['locations.json']) {
+            const data = JSON.parse(gistData.files['locations.json'].content);
+            savedLocations = data.locations || [];
+            updateSyncStatus('synced', `팀 데이터 로드 완료 (${savedLocations.length}개 위치)`);
+            renderSavedLocations();
+            updateLocationDropdowns();
+            displaySavedLocationMarkers();
+          }
+        } else {
+          updateSyncStatus('info', '팀 공유 데이터가 아직 설정되지 않았습니다.');
+        }
+
+      } catch (error) {
+        console.error('Public Gist 로드 오류:', error);
+        updateSyncStatus('info', '팀 공유 기능은 관리자가 설정해야 합니다.');
+      }
+    }
+
+    // 저장 기능은 관리자만 가능하도록 안내
+    function showSaveNotice() {
+      alert('위치 저장은 팀 관리자가 별도로 관리합니다.\n필요한 위치가 있으면 관리자에게 요청해주세요.');
+    }
+
+    function updateSyncStatus(status, text) {
+      const syncStatus = document.getElementById('syncStatus');
+      
+      syncStatus.className = 'sync-status ' + status;
+      syncStatus.style.display = 'flex';
+
+      let icon = '📋';
+      switch(status) {
+        case 'syncing':
+          icon = '🔄';
+          break;
+        case 'synced':
+          icon = '✅';
+          setTimeout(() => {
+            syncStatus.style.display = 'none';
+          }, 3000);
+          break;
+        case 'error':
+          icon = '❌';
+          break;
+        case 'info':
+          icon = 'ℹ️';
+          setTimeout(() => {
+            syncStatus.style.display = 'none';
+          }, 5000);
+          break;
+      }
+
+      syncStatus.innerHTML = `<span>${icon}</span><span>${text}</span>`;
+    }
 
     // --- Map Initialization ---
     function initMap() {
@@ -275,6 +388,10 @@
         });
 
         console.log('카카오맵 초기화 완료');
+
+        // 팀 데이터 로드
+        loadFromPublicGist();
+
       } catch (error) {
         console.error('카카오맵 초기화 오류:', error);
         document.getElementById('map').innerHTML = `
@@ -282,8 +399,7 @@
             <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
             <h3 style="color: #dc2626;">지도 로드 실패</h3>
             <p style="text-align: center; color: #666;">
-              API 키를 확인하거나 페이지를 새로고침해주세요.<br>
-              <small>관리자가 API 키를 설정해야 합니다.</small>
+              API 키를 확인하거나 페이지를 새로고침해주세요.
             </p>
             <button class="btn" onclick="location.reload()">새로고침</button>
           </div>
@@ -316,8 +432,7 @@
                 <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
                 <h3 style="color: #dc2626;">API 키 설정 필요</h3>
                 <p style="text-align: center; color: #666;">
-                  관리자가 카카오맵 API 키를 설정해야 합니다.<br>
-                  <small>HTML 파일의 YOUR_KAKAO_API_KEY_HERE 부분을 실제 키로 교체하세요.</small>
+                  카카오맵 API 키를 설정해야 합니다.
                 </p>
               </div>
             `;
@@ -422,37 +537,12 @@
       saveLocationBtn.disabled = false;
     });
 
-    // --- Save Location ---
-    saveLocationBtn.addEventListener('click', () => {
-      if (!currentSearchResult) return;
-
-      const id = Date.now().toString();
-      const shortName = prompt('이 위치를 저장할 이름을 입력하세요:', currentSearchResult.name.split(' (')[0]);
-      
-      if (!shortName) return;
-
-      const location = {
-        id,
-        name: shortName,
-        lat: currentSearchResult.lat,
-        lng: currentSearchResult.lng,
-        address: currentSearchResult.name
-      };
-
-      savedLocations.push(location);
-      
-      if (currentSearchResult.marker) currentSearchResult.marker.setMap(null);
-      if (currentSearchResult.overlay) currentSearchResult.overlay.setMap(null);
-      currentSearchResult = null;
-      
-      addSavedLocationMarker(location);
-      renderSavedLocations();
-      updateLocationDropdowns();
-      saveLocationBtn.disabled = true;
-      searchInput.value = '';
-    });
+    // --- Save Location (Notice only) ---
+    saveLocationBtn.addEventListener('click', showSaveNotice);
 
     function addSavedLocationMarker(location) {
+      if (!map) return;
+
       const markerPosition = new kakao.maps.LatLng(location.lat, location.lng);
       const marker = new kakao.maps.Marker({
         position: markerPosition,
@@ -482,6 +572,18 @@
       savedLocationMarkers.set(location.id, { marker, overlay });
     }
 
+    function displaySavedLocationMarkers() {
+      savedLocationMarkers.forEach(({ marker, overlay }) => {
+        marker.setMap(null);
+        overlay.setMap(null);
+      });
+      savedLocationMarkers.clear();
+
+      savedLocations.forEach(location => {
+        addSavedLocationMarker(location);
+      });
+    }
+
     function renderSavedLocations() {
       const container = document.getElementById('savedLocations');
       
@@ -490,15 +592,20 @@
         return;
       }
 
-      container.innerHTML = savedLocations.map(loc => 
-        `<div class="saved-location">
-          <div class="name">${loc.name}</div>
+      container.innerHTML = savedLocations.map(loc => {
+        const createdAt = loc.createdAt ? new Date(loc.createdAt).toLocaleDateString('ko-KR') : '';
+        const createdBy = loc.createdBy || '팀원';
+        
+        return `<div class="saved-location">
+          <div>
+            <div class="name">${loc.name}</div>
+            <div class="info">추가: ${createdBy} (${createdAt})</div>
+          </div>
           <div class="actions">
             <button class="btn" onclick="focusLocation('${loc.id}')">📍</button>
-            <button class="btn danger" onclick="deleteLocation('${loc.id}')">🗑️</button>
           </div>
-        </div>`
-      ).join('');
+        </div>`;
+      }).join('');
     }
 
     function updateLocationDropdowns() {
@@ -518,20 +625,6 @@
       if (location && map) {
         map.setCenter(new kakao.maps.LatLng(location.lat, location.lng));
         map.setLevel(3);
-      }
-    };
-
-    window.deleteLocation = (id) => {
-      if (confirm('이 위치를 삭제하시겠습니까?')) {
-        savedLocations = savedLocations.filter(loc => loc.id !== id);
-        const markerData = savedLocationMarkers.get(id);
-        if (markerData) {
-          markerData.marker.setMap(null);
-          markerData.overlay.setMap(null);
-          savedLocationMarkers.delete(id);
-        }
-        renderSavedLocations();
-        updateLocationDropdowns();
       }
     };
 
@@ -618,7 +711,11 @@
         polyline.setMap(map);
       }
 
-      document.getElementById('km').textContent = totalDistance.toFixed(1);
+      // 도로거리 보정계수 적용
+      const roadFactor = getNumber('roadFactor');
+      const adjustedDistance = totalDistance * roadFactor;
+
+      document.getElementById('km').textContent = adjustedDistance.toFixed(1);
       renderCost();
     }
 
@@ -771,6 +868,7 @@
       const base = getNumber('baseFee');
       const perStop = getNumber('perStop');
       const minFee = getNumber('minFee');
+      const roadFactor = getNumber('roadFactor');
 
       let routeText = '';
       if (namesOpt && namesOpt.length > 0) {
@@ -781,7 +879,7 @@
 
       const details = [
         `📍 노선: ${routeText || '경로 미설정'}`,
-        `📏 총 거리: ${km.toFixed(1)} km`,
+        `📏 총 거리: ${km.toFixed(1)} km (보정계수 ${roadFactor})`,
         `💰 단가 모델: 기본 ${base.toLocaleString('ko-KR')}원 + (km × ${perKm.toLocaleString('ko-KR')}원) + (경유 ${perStop.toLocaleString('ko-KR')}원/개)${minFee>0?` / 최소 ${minFee.toLocaleString('ko-KR')}원`:''}`,
         `💸 예상 간선비: ${cost.toLocaleString('ko-KR')}원`
       ].join('\n');
@@ -805,8 +903,13 @@
       });
     });
 
-    ['baseFee','perKm','perStop','minFee'].forEach(id => {
+    // --- Event Listeners ---
+    ['baseFee','perKm','perStop','minFee','roadFactor'].forEach(id => {
       document.getElementById(id).addEventListener('input', renderCost);
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      loadFromPublicGist();
     });
 
     // 초기 렌더링
