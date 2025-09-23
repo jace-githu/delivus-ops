@@ -685,8 +685,9 @@
     function addSavedLocationMarker(location) {
       if (!map) return;
       const markerPosition = new kakao.maps.LatLng(location.lat, location.lng);
+      const marker = new kakao.maps.Marker({ position: markerPosition, map: map });
       
-      // 커스텀 오버레이만 사용 (기본 마커 제거)
+      // 클릭 가능한 오버레이로 변경
       const overlay = new kakao.maps.CustomOverlay({
         position: markerPosition,
         content: `<div style="background: #fff; border: 2px solid #10b981; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer;" data-location-id="${location.id}">📍</div>`,
@@ -698,25 +699,29 @@
         content: `<div style="padding: 8px; font-size: 12px; white-space: nowrap;">${location.name}<br><small style="color: #666;">클릭하여 경로에 추가</small></div>`
       });
 
-      // 오버레이 클릭 및 호버 이벤트 (DOM 이벤트로 처리)
-      setTimeout(() => {
-        const overlayDiv = document.querySelector(`[data-location-id="${location.id}"]`);
-        if (overlayDiv) {
-          overlayDiv.addEventListener('click', () => {
-            handleSavedLocationClick(location);
-          });
-          
-          overlayDiv.addEventListener('mouseover', () => {
-            infowindow.open(map);
-          });
-          
-          overlayDiv.addEventListener('mouseout', () => {
-            infowindow.close();
-          });
-        }
-      }, 100);
+      // 마커 클릭 이벤트
+      kakao.maps.event.addListener(marker, 'click', () => {
+        handleSavedLocationClick(location);
+      });
 
-      savedLocationMarkers.set(location.id, { overlay });
+      // 오버레이 클릭 이벤트 (DOM 이벤트로 처리)
+      const overlayElement = overlay.getContent();
+      if (typeof overlayElement === 'string') {
+        // 오버레이가 DOM에 추가된 후 이벤트 리스너 추가
+        setTimeout(() => {
+          const overlayDiv = document.querySelector(`[data-location-id="${location.id}"]`);
+          if (overlayDiv) {
+            overlayDiv.addEventListener('click', () => {
+              handleSavedLocationClick(location);
+            });
+          }
+        }, 100);
+      }
+
+      kakao.maps.event.addListener(marker, 'mouseover', () => infowindow.open(map, marker));
+      kakao.maps.event.addListener(marker, 'mouseout', () => infowindow.close());
+
+      savedLocationMarkers.set(location.id, { marker, overlay });
     }
 
     function handleSavedLocationClick(location) {
@@ -738,7 +743,8 @@
     }
 
     function displaySavedLocationMarkers() {
-      savedLocationMarkers.forEach(({ overlay }) => {
+      savedLocationMarkers.forEach(({ marker, overlay }) => {
+        marker.setMap(null);
         overlay.setMap(null);
       });
       savedLocationMarkers.clear();
