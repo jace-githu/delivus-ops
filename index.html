@@ -90,6 +90,26 @@
       background: white;
     }
 
+    .loading-state {
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      height: 100%; 
+      flex-direction: column; 
+      color: #666;
+    }
+
+    .spinner {
+      animation: spin 1s linear infinite; 
+      font-size: 24px; 
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
     @media (max-width: 768px) {
       .container {
         grid-template-columns: 1fr;
@@ -209,36 +229,35 @@
     </section>
   </div>
 
-  <!-- 카카오맵 API 로드 - 기본 방식으로 복원 -->
+  <!-- 여기에 실제 API 키를 입력하세요 -->
   <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=961ad1fa29e637215fcfab22903bfbb5&libraries=services"></script>
   
   <script>
-    // --- Data Storage (in-memory) ---
-    let savedLocations = []; // {id, name, lat, lng, address}
-    let currentSearchResult = null; // temporary location before saving
+    // --- Data Storage ---
+    let savedLocations = [];
+    let currentSearchResult = null;
 
-    // --- Map Init ---
+    // --- Map Variables ---
     let map, ps, geocoder;
     let waypoints = [];
     let markers = [];
-    let savedLocationMarkers = new Map(); // id -> marker
-    let waypointMode = 'auto'; // 'auto' or 'waypoint'
-    let polyline = null; // 경로를 그리는 폴리라인
+    let savedLocationMarkers = new Map();
+    let waypointMode = 'auto';
+    let polyline = null;
 
-    // 카카오맵 초기화
+    // --- Map Initialization ---
     function initMap() {
       try {
         const container = document.getElementById('map');
         const options = {
-          center: new kakao.maps.LatLng(37.5665, 126.9780), // 서울 중심
+          center: new kakao.maps.LatLng(37.5665, 126.9780),
           level: 8
         };
 
         map = new kakao.maps.Map(container, options);
-        ps = new kakao.maps.services.Places(); // 장소 검색 서비스
-        geocoder = new kakao.maps.services.Geocoder(); // 좌표-주소 변환 서비스
+        ps = new kakao.maps.services.Places();
+        geocoder = new kakao.maps.services.Geocoder();
 
-        // 지도 클릭 이벤트
         kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
           const latlng = mouseEvent.latLng;
           
@@ -255,39 +274,51 @@
           }
         });
 
-        console.log('카카오맵 및 검색 서비스 초기화 완료');
+        console.log('카카오맵 초기화 완료');
       } catch (error) {
         console.error('카카오맵 초기화 오류:', error);
         document.getElementById('map').innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666;">
-            <p style="font-size: 16px; margin-bottom: 10px;">⚠️ 카카오맵 API 로드 실패</p>
-            <p style="font-size: 14px; text-align: center;">JavaScript 키를 올바르게 설정했는지 확인해주세요.</p>
-            <p style="font-size: 12px; color: #999; margin-top: 10px;">
-              <a href="https://developers.kakao.com" target="_blank">카카오 개발자사이트</a>에서 키를 발급받으세요.
+          <div class="loading-state">
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <h3 style="color: #dc2626;">지도 로드 실패</h3>
+            <p style="text-align: center; color: #666;">
+              API 키를 확인하거나 페이지를 새로고침해주세요.<br>
+              <small>관리자가 API 키를 설정해야 합니다.</small>
             </p>
+            <button class="btn" onclick="location.reload()">새로고침</button>
           </div>
         `;
       }
     }
 
-    // DOM이 로드된 후 초기화
+    // 페이지 로드 후 초기화
     window.addEventListener('DOMContentLoaded', function() {
       if (typeof kakao !== 'undefined' && kakao.maps) {
         initMap();
       } else {
-        // 스크립트 로딩을 기다림
+        document.getElementById('map').innerHTML = `
+          <div class="loading-state">
+            <div class="spinner">⏳</div>
+            <p>카카오맵을 로드하는 중...</p>
+          </div>
+        `;
+        
         let attempts = 0;
         const checkInterval = setInterval(() => {
           attempts++;
           if (typeof kakao !== 'undefined' && kakao.maps) {
             clearInterval(checkInterval);
             initMap();
-          } else if (attempts > 50) { // 5초 후 포기
+          } else if (attempts > 50) {
             clearInterval(checkInterval);
             document.getElementById('map').innerHTML = `
-              <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666;">
-                <p style="font-size: 16px; margin-bottom: 10px;">⚠️ 카카오맵 API 로드 실패</p>
-                <p style="font-size: 14px; text-align: center;">네트워크 연결을 확인하고 페이지를 새로고침해주세요.</p>
+              <div class="loading-state">
+                <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                <h3 style="color: #dc2626;">API 키 설정 필요</h3>
+                <p style="text-align: center; color: #666;">
+                  관리자가 카카오맵 API 키를 설정해야 합니다.<br>
+                  <small>HTML 파일의 YOUR_KAKAO_API_KEY_HERE 부분을 실제 키로 교체하세요.</small>
+                </p>
               </div>
             `;
           }
@@ -313,7 +344,6 @@
       searchTimeout = setTimeout(() => searchLocation(query), 300);
     });
 
-    // Hide search results when clicking outside
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.search-container')) {
         searchResults.style.display = 'none';
@@ -322,33 +352,24 @@
 
     function searchLocation(query) {
       if (!ps) {
-        console.error('Places 서비스가 초기화되지 않음');
-        searchResults.innerHTML = '<div class="search-result">검색 서비스를 초기화하는 중입니다. 잠시 후 다시 시도해주세요.</div>';
+        searchResults.innerHTML = '<div class="search-result" style="color: #dc2626;">검색 서비스가 초기화되지 않았습니다.</div>';
         searchResults.style.display = 'block';
         return;
       }
 
-      console.log('검색 시작:', query);
+      searchResults.innerHTML = '<div class="search-result">검색 중...</div>';
+      searchResults.style.display = 'block';
 
       ps.keywordSearch(query, function(data, status) {
-        console.log('검색 결과:', status, data);
-        
-        if (status === kakao.maps.services.Status.OK) {
-          displaySearchResults(data.slice(0, 5)); // 상위 5개 결과만 표시
+        if (status === kakao.maps.services.Status.OK && data.length > 0) {
+          displaySearchResults(data.slice(0, 5));
         } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
           searchResults.innerHTML = '<div class="search-result">검색 결과가 없습니다. 다른 키워드로 시도해보세요.</div>';
           searchResults.style.display = 'block';
-        } else if (status === kakao.maps.services.Status.ERROR) {
-          searchResults.innerHTML = '<div class="search-result">검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>';
-          searchResults.style.display = 'block';
         } else {
-          console.error('예상치 못한 상태:', status);
-          searchResults.innerHTML = '<div class="search-result">알 수 없는 오류가 발생했습니다.</div>';
+          searchResults.innerHTML = '<div class="search-result" style="color: #dc2626;">검색 중 오류가 발생했습니다.</div>';
           searchResults.style.display = 'block';
         }
-      }, {
-        location: map ? map.getCenter() : new kakao.maps.LatLng(37.5665, 126.9780), // 현재 지도 중심 기준 검색
-        radius: 50000 // 50km 반경
       });
     }
 
@@ -362,17 +383,15 @@
       searchResults.style.display = 'block';
     }
 
-    // Handle search result selection
     searchResults.addEventListener('click', (e) => {
       const result = e.target.closest('.search-result');
-      if (!result) return;
+      if (!result || !result.dataset.lat) return;
 
       const lat = parseFloat(result.dataset.lat);
       const lng = parseFloat(result.dataset.lng);
       const name = result.dataset.name;
       const address = result.dataset.address;
 
-      // Clear previous search result marker
       if (currentSearchResult?.marker) {
         currentSearchResult.marker.setMap(null);
       }
@@ -380,14 +399,12 @@
         currentSearchResult.overlay.setMap(null);
       }
 
-      // Add temporary marker
       const markerPosition = new kakao.maps.LatLng(lat, lng);
       const marker = new kakao.maps.Marker({
         position: markerPosition,
         map: map
       });
 
-      // 커스텀 오버레이로 검색 아이콘 표시
       const overlay = new kakao.maps.CustomOverlay({
         position: markerPosition,
         content: '<div style="background: #fff; border: 2px solid #ff6b6b; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 16px;">🔍</div>',
@@ -424,15 +441,11 @@
 
       savedLocations.push(location);
       
-      // Remove temporary marker and overlay
       if (currentSearchResult.marker) currentSearchResult.marker.setMap(null);
       if (currentSearchResult.overlay) currentSearchResult.overlay.setMap(null);
       currentSearchResult = null;
       
-      // Add permanent marker
       addSavedLocationMarker(location);
-      
-      // Update UI
       renderSavedLocations();
       updateLocationDropdowns();
       saveLocationBtn.disabled = true;
@@ -446,7 +459,6 @@
         map: map
       });
 
-      // 저장된 위치 오버레이
       const overlay = new kakao.maps.CustomOverlay({
         position: markerPosition,
         content: `<div style="background: #fff; border: 2px solid #10b981; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📍</div>`,
@@ -455,7 +467,6 @@
       });
       overlay.setMap(map);
 
-      // 인포윈도우
       const infowindow = new kakao.maps.InfoWindow({
         content: `<div style="padding: 5px; font-size: 12px;">${location.name}</div>`
       });
@@ -504,7 +515,7 @@
 
     window.focusLocation = (id) => {
       const location = savedLocations.find(loc => loc.id === id);
-      if (location) {
+      if (location && map) {
         map.setCenter(new kakao.maps.LatLng(location.lat, location.lng));
         map.setLevel(3);
       }
@@ -537,7 +548,7 @@
       const start = savedLocations.find(loc => loc.id === startId);
       const end = savedLocations.find(loc => loc.id === endId);
       
-      if (start && end) {
+      if (start && end && map) {
         resetRoute();
         addWaypoint(new kakao.maps.LatLng(start.lat, start.lng), start.name);
         addWaypoint(new kakao.maps.LatLng(end.lat, end.lng), end.name);
@@ -546,24 +557,26 @@
 
     function addWaypoint(latlng, customName = null) {
       waypoints.push(latlng);
-      const marker = new kakao.maps.Marker({
-        position: latlng,
-        map: map
-      });
-
-      const label = customName || ((waypoints.length === 1) ? '출발' : (waypoints.length === 2) ? '도착' : ('경유 ' + (waypoints.length-2)));
       
-      // 웨이포인트 오버레이
-      const color = waypoints.length === 1 ? '#22c55e' : waypoints.length === 2 ? '#ef4444' : '#f59e0b';
-      const overlay = new kakao.maps.CustomOverlay({
-        position: latlng,
-        content: `<div style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; white-space: nowrap;">${label}</div>`,
-        yAnchor: 2,
-        xAnchor: 0.5
-      });
-      overlay.setMap(map);
+      if (map) {
+        const marker = new kakao.maps.Marker({
+          position: latlng,
+          map: map
+        });
 
-      markers.push({ marker, overlay });
+        const label = customName || ((waypoints.length === 1) ? '출발' : (waypoints.length === 2) ? '도착' : ('경유 ' + (waypoints.length-2)));
+        
+        const color = waypoints.length === 1 ? '#22c55e' : waypoints.length === 2 ? '#ef4444' : '#f59e0b';
+        const overlay = new kakao.maps.CustomOverlay({
+          position: latlng,
+          content: `<div style="background: ${color}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; white-space: nowrap;">${label}</div>`,
+          yAnchor: 2,
+          xAnchor: 0.5
+        });
+        overlay.setMap(map);
+
+        markers.push({ marker, overlay });
+      }
       
       if (waypoints.length >= 2) {
         calculateRoute();
@@ -572,7 +585,6 @@
     }
 
     function calculateRoute() {
-      // 간단한 직선 거리 계산 (실제 도로 거리 계산을 위해서는 카카오 내비게이션 API가 필요)
       if (waypoints.length < 2) return;
 
       let totalDistance = 0;
@@ -584,7 +596,6 @@
           const prevLatLng = waypoints[i-1];
           const currLatLng = waypoints[i];
           
-          // 두 점 사이의 거리 계산 (하버사인 공식)
           const distance = getDistanceFromLatLonInKm(
             prevLatLng.getLat(), prevLatLng.getLng(),
             currLatLng.getLat(), currLatLng.getLng()
@@ -593,49 +604,46 @@
         }
       }
 
-      // 기존 폴리라인 제거
       if (polyline) {
         polyline.setMap(null);
       }
 
-      // 새 폴리라인 그리기
-      polyline = new kakao.maps.Polyline({
-        path: path,
-        strokeWeight: 6,
-        strokeColor: '#6366f1',
-        strokeOpacity: 0.8
-      });
-      polyline.setMap(map);
+      if (map) {
+        polyline = new kakao.maps.Polyline({
+          path: path,
+          strokeWeight: 6,
+          strokeColor: '#6366f1',
+          strokeOpacity: 0.8
+        });
+        polyline.setMap(map);
+      }
 
-      // 거리 업데이트
       document.getElementById('km').textContent = totalDistance.toFixed(1);
       renderCost();
     }
 
-    // 하버사인 공식으로 두 좌표 간 거리 계산
     function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-      const R = 6371; // 지구 반지름 (km)
+      const R = 6371;
       const dLat = deg2rad(lat2-lat1);
       const dLon = deg2rad(lon2-lon1); 
       const a = 
         Math.sin(dLat/2) * Math.sin(dLat/2) +
         Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2)
-        ; 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-      const d = R * c; // 거리 (km)
+      const d = R * c;
       return d;
     }
 
     function deg2rad(deg) {
-      return deg * (Math.PI/180)
+      return deg * (Math.PI/180);
     }
 
     function resetRoute() {
       waypoints = [];
       markers.forEach(m => {
-        m.marker.setMap(null);
-        m.overlay.setMap(null);
+        if (m.marker) m.marker.setMap(null);
+        if (m.overlay) m.overlay.setMap(null);
       });
       markers = [];
       if (polyline) {
@@ -660,7 +668,6 @@
       }
     }
 
-    // Add waypoint button
     document.getElementById('addWaypointBtn').addEventListener('click', () => {
       if (waypoints.length < 2) {
         alert('먼저 출발지와 도착지를 설정해주세요.');
@@ -670,13 +677,12 @@
       updateAddWaypointButton();
     });
 
-    // Other button handlers
     document.getElementById('undoBtn').addEventListener('click', () => {
       if (waypoints.length === 0) return;
       const m = markers.pop();
       if (m) {
-        m.marker.setMap(null);
-        m.overlay.setMap(null);
+        if (m.marker) m.marker.setMap(null);
+        if (m.overlay) m.overlay.setMap(null);
       }
       waypoints.pop();
       if (waypoints.length >= 2) {
@@ -697,7 +703,6 @@
       document.getElementById('endSelect').value = '';
     });
 
-    // Render waypoints list
     async function renderWpList() {
       const el = document.getElementById('wpList');
       if (waypoints.length === 0) {
@@ -735,8 +740,9 @@
       });
     }
 
-    // Cost calculation
-    function getNumber(id) { return Math.max(0, Number(document.getElementById(id).value || 0)); }
+    function getNumber(id) { 
+      return Math.max(0, Number(document.getElementById(id).value || 0)); 
+    }
 
     function calcCost(km) {
       const base = getNumber('baseFee');
@@ -758,7 +764,6 @@
       renderSlack();
     }
 
-    // Slack message
     function renderSlack(namesOpt) {
       const km = Number(document.getElementById('km').textContent) || 0;
       const cost = calcCost(km);
@@ -783,14 +788,12 @@
       document.getElementById('slackText').textContent = details;
     }
 
-    // Copy to clipboard
     document.getElementById('copyBtn').addEventListener('click', () => {
       const text = document.getElementById('slackText').textContent;
       navigator.clipboard.writeText(text).then(() => {
         document.getElementById('copyBtn').textContent = '복사됨 ✅';
         setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1200);
       }).catch(() => {
-        // Fallback for older browsers
         const textArea = document.createElement('textarea');
         textArea.value = text;
         document.body.appendChild(textArea);
@@ -802,12 +805,11 @@
       });
     });
 
-    // Inputs change -> recalc
     ['baseFee','perKm','perStop','minFee'].forEach(id => {
       document.getElementById(id).addEventListener('input', renderCost);
     });
 
-    // Initial render
+    // 초기 렌더링
     renderSavedLocations();
     renderSlack();
     updateAddWaypointButton();
