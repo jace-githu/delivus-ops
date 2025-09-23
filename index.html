@@ -82,6 +82,48 @@
 
     .distance-note { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 12px; color: #92400e; }
 
+    /* 토글 섹션 스타일 */
+    .toggle-section { margin-top: 16px; margin-bottom: 16px; }
+    .toggle-header { 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      padding: 10px 12px; 
+      background: #f8fafc; 
+      border: 1px solid var(--border); 
+      border-radius: 10px; 
+      cursor: pointer; 
+      transition: all 0.2s ease;
+    }
+    .toggle-header:hover { background: #f1f5f9; }
+    .toggle-header h3 { 
+      margin: 0; 
+      font-size: 14px; 
+      color: var(--muted); 
+      font-weight: 700; 
+      letter-spacing: .02em; 
+      display: flex; 
+      align-items: center; 
+      gap: 6px;
+    }
+    .toggle-arrow { 
+      transition: transform 0.2s ease; 
+      font-size: 12px; 
+      color: var(--muted);
+    }
+    .toggle-arrow.expanded { transform: rotate(180deg); }
+    .toggle-content { 
+      overflow: hidden; 
+      transition: max-height 0.3s ease, opacity 0.3s ease; 
+      max-height: 0; 
+      opacity: 0;
+    }
+    .toggle-content.expanded { 
+      max-height: 1000px; 
+      opacity: 1; 
+      padding-top: 10px;
+    }
+
     @media (max-width: 768px) {
       .container { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: calc(100vh - 66px); }
       .panel:first-child { order: 2; }
@@ -114,9 +156,17 @@
         <button class="btn success" id="saveLocationBtn" disabled>위치 저장 및 팀 공유</button>
       </div>
 
-      <h3>팀 공유 위치 <button class="btn" id="refreshBtn" style="padding: 4px 8px; font-size: 11px;">🔄</button></h3>
-      <div class="saved-locations" id="savedLocations">
-        <div class="hint">저장된 위치가 없습니다.</div>
+      <!-- 토글 형태로 변경된 팀 공유 위치 섹션 -->
+      <div class="toggle-section">
+        <div class="toggle-header" id="toggleHeader">
+          <h3>팀 공유 위치 <button class="btn" id="refreshBtn" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation();">🔄</button></h3>
+          <span class="toggle-arrow" id="toggleArrow">▼</span>
+        </div>
+        <div class="toggle-content" id="toggleContent">
+          <div class="saved-locations" id="savedLocations">
+            <div class="hint">저장된 위치가 없습니다.</div>
+          </div>
+        </div>
       </div>
 
       <h3>경로 설정</h3>
@@ -227,6 +277,27 @@
     let waypointMode = 'auto';
     let polyline = null;
 
+    // --- Toggle functionality ---
+    let isToggleOpen = false;
+
+    function initToggle() {
+      const toggleHeader = document.getElementById('toggleHeader');
+      const toggleContent = document.getElementById('toggleContent');
+      const toggleArrow = document.getElementById('toggleArrow');
+
+      toggleHeader.addEventListener('click', function() {
+        isToggleOpen = !isToggleOpen;
+        
+        if (isToggleOpen) {
+          toggleContent.classList.add('expanded');
+          toggleArrow.classList.add('expanded');
+        } else {
+          toggleContent.classList.remove('expanded');
+          toggleArrow.classList.remove('expanded');
+        }
+      });
+    }
+
     // --- Load pins from Google Sheets via Apps Script ---
     async function loadFromSheet() {
       updateSyncStatus('syncing', '팀 데이터 로드 중...');
@@ -300,6 +371,8 @@
 
     // 페이지 로드 후 초기화
     window.addEventListener('DOMContentLoaded', function() {
+      initToggle(); // 토글 초기화 추가
+      
       if (typeof kakao !== 'undefined' && kakao.maps) {
         initMap();
       } else {
