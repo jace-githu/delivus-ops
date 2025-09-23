@@ -90,17 +90,20 @@
       background: white;
     }
 
-    .api-notice {
-      background: #fff3cd;
-      border: 1px solid #ffeaa7;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 16px;
-      font-size: 13px;
-      color: #856404;
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+        height: auto;
+        min-height: calc(100vh - 66px);
+      }
+      .panel:first-child {
+        order: 2;
+      }
+      #map {
+        height: 400px;
+      }
     }
-    
-    .api-notice strong { color: #b45309; }
   </style>
 </head>
 <body>
@@ -111,11 +114,6 @@
   <div class="container">
     <!-- Left Controls -->
     <section class="panel" id="panel">
-      <div class="api-notice">
-        <strong>⚠️ API 키 설정 필요:</strong><br>
-        카카오맵 API를 사용하려면 <a href="https://developers.kakao.com" target="_blank">카카오 개발자사이트</a>에서 JavaScript 키를 발급받아 아래 코드의 'YOUR_JAVASCRIPT_KEY'를 교체해주세요.
-      </div>
-
       <h3>위치 검색 및 저장</h3>
       <div class="control search-container">
         <label>위치 검색 (주소, 건물명, 랜드마크 등)</label>
@@ -338,6 +336,9 @@
       // Clear previous search result marker
       if (currentSearchResult?.marker) {
         currentSearchResult.marker.setMap(null);
+      }
+      if (currentSearchResult?.overlay) {
+        currentSearchResult.overlay.setMap(null);
       }
 
       // Add temporary marker
@@ -612,4 +613,165 @@
     function updateAddWaypointButton() {
       const btn = document.getElementById('addWaypointBtn');
       if (waypointMode === 'waypoint') {
-        btn.textContent = '지도 클릭하
+        btn.textContent = '지도 클릭하여 경유지 추가';
+        btn.classList.add('warning');
+      } else {
+        btn.textContent = '경유지 추가';
+        btn.classList.remove('warning');
+      }
+    }
+
+    // Add waypoint button
+    document.getElementById('addWaypointBtn').addEventListener('click', () => {
+      if (waypoints.length < 2) {
+        alert('먼저 출발지와 도착지를 설정해주세요.');
+        return;
+      }
+      waypointMode = 'waypoint';
+      updateAddWaypointButton();
+    });
+
+    // Other button handlers
+    document.getElementById('undoBtn').addEventListener('click', () => {
+      if (waypoints.length === 0) return;
+      const m = markers.pop();
+      if (m) {
+        m.marker.setMap(null);
+        m.overlay.setMap(null);
+      }
+      waypoints.pop();
+      if (waypoints.length >= 2) {
+        calculateRoute();
+      } else if (polyline) {
+        polyline.setMap(null);
+        polyline = null;
+      }
+      waypointMode = 'auto';
+      updateAddWaypointButton();
+      renderWpList();
+      renderCost();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      resetRoute();
+      document.getElementById('startSelect').value = '';
+      document.getElementById('endSelect').value = '';
+    });
+
+    // Render waypoints list
+    async function renderWpList() {
+      const el = document.getElementById('wpList');
+      if (waypoints.length === 0) {
+        el.textContent = '경로를 설정하면 여기에 순서가 표시됩니다.';
+        renderSlack();
+        return;
+      }
+      
+      const names = await Promise.all(waypoints.map((latlng, idx) => reverseName(latlng, idx)));
+      el.innerHTML = names.map((n,i)=> `<div>${i===0?'출발':(i===1?'도착':'경유 '+(i-1))}: <code>${n}</code></div>`).join('');
+      renderSlack(names);
+    }
+
+    async function reverseName(latlng, idx) {
+      return new Promise((resolve) => {
+        if (!geocoder) {
+          resolve(`${latlng.getLat().toFixed(5)}, ${latlng.getLng().toFixed(5)}`);
+          return;
+        }
+
+        geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result, status) => {
+          if (status === kakao.maps.services.Status.OK) {
+            const address = result[0];
+            if (address.road_address) {
+              resolve(address.road_address.address_name);
+            } else if (address.address) {
+              resolve(address.address.address_name);
+            } else {
+              resolve(`${latlng.getLat().toFixed(5)}, ${latlng.getLng().toFixed(5)}`);
+            }
+          } else {
+            resolve(`${latlng.getLat().toFixed(5)}, ${latlng.getLng().toFixed(5)}`);
+          }
+        });
+      });
+    }
+
+    // Cost calculation
+    function getNumber(id) { return Math.max(0, Number(document.getElementById(id).value || 0)); }
+
+    function calcCost(km) {
+      const base = getNumber('baseFee');
+      const perKm = getNumber('perKm');
+      const perStop = getNumber('perStop');
+      const minFee = getNumber('minFee');
+
+      const extraStops = Math.max(0, waypoints.length - 2);
+      let cost = base + (km * perKm) + (extraStops * perStop);
+      if (minFee > 0) cost = Math.max(cost, minFee);
+      cost = Math.round(cost / 10) * 10;
+      return cost;
+    }
+
+    function renderCost() {
+      const km = Number(document.getElementById('km').textContent) || 0;
+      const cost = calcCost(km);
+      document.getElementById('cost').textContent = cost.toLocaleString('ko-KR');
+      renderSlack();
+    }
+
+    // Slack message
+    function renderSlack(namesOpt) {
+      const km = Number(document.getElementById('km').textContent) || 0;
+      const cost = calcCost(km);
+      const perKm = getNumber('perKm');
+      const base = getNumber('baseFee');
+      const perStop = getNumber('perStop');
+      const minFee = getNumber('minFee');
+
+      let routeText = '';
+      if (namesOpt && namesOpt.length > 0) {
+        routeText = namesOpt.map((n,i)=> (i===0?'출발':(i===1?'도착':'경유'+(i-1))) + ': ' + n).join(' → ');
+      } else {
+        routeText = waypoints.map((w,i)=> (i===0?'출발':(i===1?'도착':'경유'+(i-1)))).join(' → ');
+      }
+
+      const details = [
+        `📍 노선: ${routeText || '경로 미설정'}`,
+        `📏 총 거리: ${km.toFixed(1)} km`,
+        `💰 단가 모델: 기본 ${base.toLocaleString('ko-KR')}원 + (km × ${perKm.toLocaleString('ko-KR')}원) + (경유 ${perStop.toLocaleString('ko-KR')}원/개)${minFee>0?` / 최소 ${minFee.toLocaleString('ko-KR')}원`:''}`,
+        `💸 예상 간선비: ${cost.toLocaleString('ko-KR')}원`
+      ].join('\n');
+      document.getElementById('slackText').textContent = details;
+    }
+
+    // Copy to clipboard
+    document.getElementById('copyBtn').addEventListener('click', () => {
+      const text = document.getElementById('slackText').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('copyBtn').textContent = '복사됨 ✅';
+        setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1200);
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        document.getElementById('copyBtn').textContent = '복사됨 ✅';
+        setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1200);
+      });
+    });
+
+    // Inputs change -> recalc
+    ['baseFee','perKm','perStop','minFee'].forEach(id => {
+      document.getElementById(id).addEventListener('input', renderCost);
+    });
+
+    // Initial render
+    renderSavedLocations();
+    renderSlack();
+    updateAddWaypointButton();
+  </script>
+</body>
+</html>
