@@ -113,15 +113,16 @@
     }
     .toggle-arrow.expanded { transform: rotate(180deg); }
     .toggle-content { 
-      overflow: hidden; 
-      transition: max-height 0.3s ease, opacity 0.3s ease; 
-      max-height: 0; 
-      opacity: 0;
+      display: none;
+      padding-top: 10px;
     }
     .toggle-content.expanded { 
-      max-height: 1000px; 
-      opacity: 1; 
-      padding-top: 10px;
+      display: block;
+    }
+    .toggle-content .saved-locations {
+      max-height: 300px;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     @media (max-width: 768px) {
@@ -533,6 +534,13 @@
         if (!res.ok) throw new Error(await res.text());
         updateSyncStatus('synced', '팀 위치가 저장되었습니다. 목록을 갱신합니다.');
         saveLocationBtn.disabled = true;
+        
+        // 검색 결과 마커 제거
+        if (currentSearchResult.marker) currentSearchResult.marker.setMap(null);
+        if (currentSearchResult.overlay) currentSearchResult.overlay.setMap(null);
+        currentSearchResult = null;
+        searchInput.value = '';
+        
         await loadFromSheet();
       } catch (e) {
         console.error('저장 오류:', e);
