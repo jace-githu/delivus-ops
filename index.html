@@ -48,17 +48,9 @@
     
     .search-container { position: relative; }
     .search-results { 
-      position: absolute; 
-      top: 100%; 
-      left: 0; 
-      right: 0; 
-      background: white; 
-      border: 1px solid var(--border); 
-      border-radius: 10px; 
-      max-height: 200px; 
-      overflow-y: auto; 
-      z-index: 1000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      position: absolute; top: 100%; left: 0; right: 0; background: white; 
+      border: 1px solid var(--border); border-radius: 10px; max-height: 200px; 
+      overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     .search-result { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); font-size: 13px; }
     .search-result:hover { background: #f9fafb; }
@@ -66,15 +58,9 @@
     
     .saved-locations { margin-top: 10px; }
     .saved-location { 
-      display: flex; 
-      align-items: center; 
-      justify-content: space-between; 
-      padding: 8px 10px; 
-      margin-bottom: 6px; 
-      background: #f8fafc; 
-      border: 1px solid var(--border); 
-      border-radius: 8px; 
-      font-size: 13px;
+      display: flex; align-items: center; justify-content: space-between; 
+      padding: 8px 10px; margin-bottom: 6px; background: #f8fafc; 
+      border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
     }
     .saved-location .name { font-weight: 500; }
     .saved-location .info { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -82,78 +68,30 @@
     .saved-location .btn { padding: 4px 8px; font-size: 11px; }
     
     .location-selector { margin-bottom: 10px; }
-    .location-dropdown { 
-      width: 100%; 
-      padding: 8px 10px; 
-      border: 1px solid var(--border); 
-      border-radius: 8px; 
-      font-size: 13px; 
-      background: white;
-    }
+    .location-dropdown { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: white; }
 
-    .sync-status {
-      padding: 8px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .sync-status { padding: 8px 10px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
     .sync-status.syncing { background: #fef3c7; color: #92400e; }
     .sync-status.synced { background: #d1fae5; color: #166534; }
     .sync-status.error { background: #fee2e2; color: #dc2626; }
     .sync-status.info { background: #dbeafe; color: #1e40af; }
 
-    .loading-state {
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
-      height: 100%; 
-      flex-direction: column; 
-      color: #666;
-    }
+    .loading-state { display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666; }
+    .spinner { animation: spin 1s linear infinite; font-size: 24px; margin-bottom: 10px; }
+    @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
 
-    .spinner {
-      animation: spin 1s linear infinite; 
-      font-size: 24px; 
-      margin-bottom: 10px;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    .distance-note {
-      background: #fef3c7;
-      border: 1px solid #f59e0b;
-      border-radius: 8px;
-      padding: 8px;
-      margin-top: 8px;
-      font-size: 12px;
-      color: #92400e;
-    }
+    .distance-note { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 12px; color: #92400e; }
 
     @media (max-width: 768px) {
-      .container {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
-        height: auto;
-        min-height: calc(100vh - 66px);
-      }
-      .panel:first-child {
-        order: 2;
-      }
-      #map {
-        height: 400px;
-      }
+      .container { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: calc(100vh - 66px); }
+      .panel:first-child { order: 2; }
+      #map { height: 400px; }
     }
   </style>
 </head>
 <body>
   <header>
-    <div class="title">딜리래빗 간선비용 계산기 (카카오맵)</div>
+    <div class="title">딜리래빗 간선비용 계산기 (팀 공유)</div>
   </header>
 
   <div class="container">
@@ -345,7 +283,6 @@
         });
 
         console.log('카카오맵 초기화 완료');
-        // 팀 데이터 로드
         loadFromSheet();
 
       } catch (error) {
@@ -465,7 +402,13 @@
       });
       overlay.setMap(map);
 
-      currentSearchResult = { lat, lng, name: name + ' (' + address + ')', marker, overlay };
+      currentSearchResult = { 
+        lat, 
+        lng, 
+        name: name + ' (' + address + ')',
+        marker, 
+        overlay 
+      };
       map.setCenter(markerPosition);
       map.setLevel(3);
       searchResults.style.display = 'none';
@@ -473,17 +416,37 @@
       saveLocationBtn.disabled = false;
     });
 
-    // --- Save Location to Google Sheets via Apps Script ---
+    // --- Save Location (with custom name) ---
     saveLocationBtn.addEventListener('click', saveLocationToTeam);
+
+    function slugify(s) {
+      return (s || '')
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[\s]+/g, '-')
+        .replace(/[^a-z0-9\-가-힣]/g, '')
+        .slice(0, 40);
+    }
 
     async function saveLocationToTeam() {
       if (!currentSearchResult) {
         alert('먼저 검색 후 지점을 선택하세요.');
         return;
       }
+      // 이름 입력(기본값: 검색 결과명)
+      const defaultName = currentSearchResult.name?.split(' (')[0] || '장소';
+      const custom = prompt('저장할 이름을 입력하세요', defaultName);
+      const finalName = (custom && custom.trim()) ? custom.trim() : defaultName;
+
+      // id 생성: 이름 slug + 좌표 해시(충돌 방지)
+      const id = `${slugify(finalName)}-${Math.round(currentSearchResult.lat*1e5)}-${Math.round(currentSearchResult.lng*1e5)}`;
+
       // x-www-form-urlencoded 로 전송 (프리플라이트 회피)
       const form = new URLSearchParams();
-      form.set('name', currentSearchResult.name);
+      form.set('action', 'add'); // 서버가 없어도 무시 가능
+      form.set('id', id);
+      form.set('name', finalName);
       form.set('lat', String(currentSearchResult.lat));
       form.set('lng', String(currentSearchResult.lng));
       form.set('createdBy', '공용');
@@ -495,11 +458,37 @@
           body: form.toString()
         });
         if (!res.ok) throw new Error(await res.text());
-        updateSyncStatus('synced', '팀 위치가 저장되었습니다. 🔄 버튼으로 갱신하세요.');
+        updateSyncStatus('synced', '팀 위치가 저장되었습니다. 목록을 갱신합니다.');
         saveLocationBtn.disabled = true;
+        await loadFromSheet();
       } catch (e) {
         console.error('저장 오류:', e);
         updateSyncStatus('error', '저장 실패: 잠시 후 다시 시도해주세요.');
+      }
+    }
+
+    // --- Delete Location ---
+    async function deleteLocation(id) {
+      const target = savedLocations.find(l => l.id === id);
+      if (!target) return;
+      if (!confirm(`'${target.name}' 핀을 삭제할까요?`)) return;
+
+      const form = new URLSearchParams();
+      form.set('action', 'delete');
+      form.set('id', id);
+
+      try {
+        const res = await fetch(PINS_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        updateSyncStatus('synced', '삭제 완료. 목록을 새로 고칩니다.');
+        await loadFromSheet();
+      } catch (e) {
+        console.error('삭제 오류:', e);
+        updateSyncStatus('error', '삭제 실패: 잠시 후 다시 시도해주세요.');
       }
     }
 
@@ -548,6 +537,7 @@
           </div>
           <div class="actions">
             <button class="btn" onclick="focusLocation('${loc.id}')">📍</button>
+            <button class="btn danger" onclick="deleteLocation('${loc.id}')">🗑</button>
           </div>
         </div>`;
       }).join('');
