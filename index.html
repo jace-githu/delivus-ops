@@ -776,7 +776,7 @@
     });
 
     function searchLocation(query) {
-      if (!ps) {
+      if (!ps || !geocoder) {
         searchResults.innerHTML = '<div class="search-result" style="color: #dc2626;">검색 서비스가 초기화되지 않았습니다.</div>';
         searchResults.style.display = 'block';
         return;
@@ -784,16 +784,56 @@
       searchResults.innerHTML = '<div class="search-result">검색 중...</div>';
       searchResults.style.display = 'block';
 
-      ps.keywordSearch(query, function(data, status) {
-        if (status === kakao.maps.services.Status.OK && data.length > 0) {
-          displaySearchResults(data.slice(0, 5));
-        } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-          searchResults.innerHTML = '<div class="search-result">검색 결과가 없습니다. 다른 키워드로 시도해보세요.</div>';
-          searchResults.style.display = 'block';
-        } else {
-          searchResults.innerHTML = '<div class="search-result" style="color: #dc2626;">검색 중 오류가 발생했습니다.</div>';
-          searchResults.style.display = 'block';
+      let allResults = [];
+      let completedRequests = 0;
+      const totalRequests = 2;
+
+      const displayCombinedResults = () => {
+        completedRequests++;
+        if (completedRequests === totalRequests) {
+          // 중복 제거 및 정렬
+          const uniqueResults = [];
+          const seenPlaces = new Set();
+          
+          allResults.forEach(result => {
+            const key = `${result.place_name || result.address_name}_${result.y}_${result.x}`;
+            if (!seenPlaces.has(key)) {
+              seenPlaces.add(key);
+              uniqueResults.push(result);
+            }
+          });
+
+          if (uniqueResults.length > 0) {
+            displaySearchResults(uniqueResults.slice(0, 8));
+          } else {
+            searchResults.innerHTML = '<div class="search-result">검색 결과가 없습니다. 다른 키워드로 시도해보세요.</div>';
+            searchResults.style.display = 'block';
+          }
         }
+      };
+
+      // 1. 키워드 검색 (업체명, POI)
+      ps.keywordSearch(query, function(data, status) {
+        if (status === kakao.maps.services.Status.OK) {
+          allResults = allResults.concat(data);
+        }
+        displayCombinedResults();
+      });
+
+      // 2. 주소 검색
+      geocoder.addressSearch(query, function(data, status) {
+        if (status === kakao.maps.services.Status.OK) {
+          // 주소 검색 결과를 키워드 검색과 동일한 형태로 변환
+          const addressResults = data.map(item => ({
+            place_name: item.address_name,
+            address_name: item.address_name,
+            x: item.x,
+            y: item.y,
+            category_name: '주소'
+          }));
+          allResults = allResults.concat(addressResults);
+        }
+        displayCombinedResults();
       });
     }
 
