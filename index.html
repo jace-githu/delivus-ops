@@ -1026,14 +1026,23 @@
     window.focusLocation = (id) => {
       const location = savedLocations.find(loc => loc.id === id);
       if (location && map) {
-        map.setCenter(new kakao.maps.LatLng(location.lat, location.lng));
-        map.setLevel(3);
+        const targetPosition = new kakao.maps.LatLng(location.lat, location.lng);
         
-        const markerInfo = savedLocationMarkers.get(id);
-        if (markerInfo && markerInfo.infowindow) {
-          markerInfo.infowindow.open(map);
-          setTimeout(() => markerInfo.infowindow.close(), 2000);
-        }
+        // 순차적으로 실행하여 지도 이동 문제 방지
+        map.setLevel(3);
+        setTimeout(() => {
+          map.setCenter(targetPosition);
+          
+          // 마커 정보창 표시
+          const markerInfo = savedLocationMarkers.get(id);
+          if (markerInfo && markerInfo.infowindow) {
+            setTimeout(() => {
+              markerInfo.infowindow.setPosition(targetPosition);
+              markerInfo.infowindow.open(map);
+              setTimeout(() => markerInfo.infowindow.close(), 2000);
+            }, 100);
+          }
+        }, 100);
       }
     };
 
