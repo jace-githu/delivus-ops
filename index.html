@@ -864,7 +864,6 @@
       const marker = new kakao.maps.Marker({ 
         position: markerPosition, 
         map: map,
-        // 검색 결과 마커 크기 조정
         image: new kakao.maps.MarkerImage(
           'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
           new kakao.maps.Size(20, 28)
@@ -872,9 +871,20 @@
       });
 
       const infowindow = new kakao.maps.InfoWindow({
-        content: `<div style="padding: 8px 24px 8px 8px; font-size: 12px; white-space: nowrap; position: relative;">
-          <div style="font-weight: bold;">${name}</div>
-          <button onclick="clearSearchResult()" style="position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: #dc2626; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 10px; line-height: 1; display: flex; align-items: center; justify-content: center;">×</button>
+        content: `<div style="padding: 12px 24px 12px 12px; font-size: 12px; white-space: nowrap; position: relative; min-width: 120px;">
+          <div style="font-weight: bold; margin-bottom: 8px;">${name}</div>
+          <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <button onclick="setAsWaypoint('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', 'start')" 
+                    style="padding: 4px 8px; font-size: 11px; background: #22c55e; color: white; border: none; border-radius: 4px; cursor: pointer;">출발</button>
+            <button onclick="setAsWaypoint('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', 'end')" 
+                    style="padding: 4px 8px; font-size: 11px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">도착</button>
+            <button onclick="setAsWaypoint('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', 'waypoint')" 
+                    style="padding: 4px 8px; font-size: 11px; background: #f59e0b; color: white; border: none; border-radius: 4px; cursor: pointer;">경유</button>
+          </div>
+          <button onclick="saveSearchResultToTeam('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', '${address.replace(/'/g, "\\'")}')" 
+                  style="padding: 4px 8px; font-size: 11px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 4px;">저장</button>
+          <button onclick="clearSearchResult()" 
+                  style="position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: #dc2626; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 10px; line-height: 1; display: flex; align-items: center; justify-content: center;">×</button>
         </div>`
       });
       infowindow.open(map, marker);
@@ -905,33 +915,73 @@
         .slice(0, 40);
     }
 
-    // 검색 결과 마커 제거 함수 추가
-    window.clearSearchResult = () => {
-      if (currentSearchResult?.marker) currentSearchResult.marker.setMap(null);
-      if (currentSearchResult?.infowindow) currentSearchResult.infowindow.close();
-      currentSearchResult = null;
-      searchInput.value = '';
-      saveLocationBtn.disabled = true;
+    // 검색 결과를 경로에 추가하는 함수
+    window.setAsWaypoint = (lat, lng, name, type) => {
+      const latlng = new kakao.maps.LatLng(parseFloat(lat), parseFloat(lng));
+      
+      if (type === 'start') {
+        // 출발지 설정 - 기존 경로 초기화하고 출발지로 설정
+        resetRoute();
+        addWaypoint(latlng, name);
+      } else if (type === 'end') {
+        // 도착지 설정
+        if (waypoints.length === 0) {
+          alert('먼저 출발지를 설정해주세요.');
+          return;
+        } else if (waypoints.length === 1) {
+          addWaypoint(latlng, name);
+        } else {
+          // 기존 도착지 교체
+          const lastMarker = markers[markers.length - 1];
+          if (lastMarker) {
+            if (lastMarker.marker) lastMarker.marker.setMap(null);
+            if (lastMarker.overlay) lastMarker.overlay.setMap(null);
+          }
+          markers.pop();
+          waypoints[waypoints.length - 1] = latlng;
+          
+          // 새 도착지 마커 추가
+          const marker = new kakao.maps.Marker({ position: latlng, map: map });
+          const overlay = new kakao.maps.CustomOverlay({
+            position: latlng,
+            content: `<div style="background: #ef4444; color: white; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${name}</div>`,
+            yAnchor: 2, 
+            xAnchor: 0.5
+          });
+          overlay.setMap(map);
+          markers.push({ marker, overlay });
+          
+          calculateRoute();
+          renderWpList();
+        }
+      } else if (type === 'waypoint') {
+        // 경유지 추가
+        if (waypoints.length < 2) {
+          alert('먼저 출발지와 도착지를 설정해주세요.');
+          return;
+        }
+        addWaypoint(latlng, name);
+      }
+      
+      // 검색 결과 마커 자동 제거
+      clearSearchResult();
     };
 
-    async function saveLocationToTeam() {
-      if (!currentSearchResult) {
-        alert('먼저 검색 후 지점을 선택하세요.');
-        return;
-      }
-      const defaultName = currentSearchResult.name?.split(' (')[0] || '장소';
+    // 검색 결과를 팀에 저장하는 함수
+    window.saveSearchResultToTeam = async (lat, lng, name, address) => {
+      const defaultName = name || '장소';
       const custom = prompt('저장할 이름을 입력하세요', defaultName);
-      if (custom === null) return; // 사용자가 취소한 경우
+      if (custom === null) return;
       const finalName = (custom && custom.trim()) ? custom.trim() : defaultName;
 
-      const id = `${slugify(finalName)}-${Math.round(currentSearchResult.lat*1e5)}-${Math.round(currentSearchResult.lng*1e5)}`;
+      const id = `${slugify(finalName)}-${Math.round(parseFloat(lat)*1e5)}-${Math.round(parseFloat(lng)*1e5)}`;
 
       const form = new URLSearchParams();
       form.set('action', 'add');
       form.set('id', id);
       form.set('name', finalName);
-      form.set('lat', String(currentSearchResult.lat));
-      form.set('lng', String(currentSearchResult.lng));
+      form.set('lat', String(lat));
+      form.set('lng', String(lng));
       form.set('createdBy', '공용');
 
       try {
@@ -943,14 +993,31 @@
         if (!res.ok) throw new Error(await res.text());
         updateSyncStatus('synced', '팀 위치가 저장되었습니다. 목록을 갱신합니다.');
         
-        // 검색 결과 마커 자동 정리
         clearSearchResult();
-        
         await loadFromSheet();
       } catch (e) {
         console.error('저장 오류:', e);
         updateSyncStatus('error', '저장 실패: 잠시 후 다시 시도해주세요.');
       }
+    };
+
+    // 검색 결과 마커 제거 함수 추가
+    window.clearSearchResult = () => {
+      if (currentSearchResult?.marker) currentSearchResult.marker.setMap(null);
+      if (currentSearchResult?.infowindow) currentSearchResult.infowindow.close();
+      currentSearchResult = null;
+      searchInput.value = '';
+      saveLocationBtn.disabled = true;
+    };
+
+    async function saveLocationToTeam() {
+      // 이 함수는 이제 사용되지 않지만 기존 버튼과의 호환성을 위해 유지
+      if (!currentSearchResult) {
+        alert('먼저 검색 후 지점을 선택하세요.');
+        return;
+      }
+      const defaultName = currentSearchResult.name?.split(' (')[0] || '장소';
+      await saveSearchResultToTeam(currentSearchResult.lat, currentSearchResult.lng, defaultName, currentSearchResult.name);
     }
 
     async function deleteLocation(id) {
