@@ -430,75 +430,6 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
 
-    /* 로드뷰 모달 스타일 */
-    .roadview-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.8);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-    }
-    .roadview-modal.show {
-      display: flex;
-    }
-    .roadview-content {
-      background: white;
-      border-radius: 16px;
-      width: 90vw;
-      height: 80vh;
-      max-width: 1200px;
-      max-height: 800px;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    }
-    .roadview-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    }
-    .roadview-header h3 {
-      margin: 0;
-      font-size: 16px;
-      color: var(--text);
-      font-weight: 700;
-    }
-    .roadview-close {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: var(--muted);
-      padding: 4px;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-    .roadview-close:hover {
-      background: var(--danger);
-      color: white;
-    }
-    .roadview-container {
-      height: calc(100% - 65px);
-      position: relative;
-    }
-    #roadviewMap {
-      width: 100%;
-      height: 100%;
-    }
-
     @media (max-width: 768px) {
       .container { 
         grid-template-columns: 1fr; 
@@ -646,19 +577,6 @@
     </section>
   </div>
 
-  <!-- 로드뷰 모달 -->
-  <div id="roadviewModal" class="roadview-modal">
-    <div class="roadview-content">
-      <div class="roadview-header">
-        <h3 id="roadviewTitle">로드뷰</h3>
-        <button class="roadview-close" onclick="closeRoadview()">×</button>
-      </div>
-      <div class="roadview-container">
-        <div id="roadviewMap"></div>
-      </div>
-    </div>
-  </div>
-
   <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=961ad1fa29e637215fcfab22903bfbb5&libraries=services"></script>
   
   <script>
@@ -674,7 +592,6 @@
     let polyline = null;
     let currentMode = 'pin';
     let isToggleOpen = false;
-    let roadviewInstance = null;
 
     function initToggle() {
       const toggleHeader = document.getElementById('toggleHeader');
@@ -964,12 +881,8 @@
             <button onclick="setAsWaypoint('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', 'waypoint')" 
                     style="padding: 4px 8px; font-size: 11px; background: #f59e0b; color: white; border: none; border-radius: 4px; cursor: pointer;">경유</button>
           </div>
-          <div style="display: flex; gap: 6px; margin-bottom: 4px;">
-            <button onclick="saveSearchResultToTeam('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', '${address.replace(/'/g, "\\'")}')" 
-                    style="padding: 4px 8px; font-size: 11px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">저장</button>
-            <button onclick="openRoadview('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', '${address.replace(/'/g, "\\'")}')" 
-                    style="padding: 4px 8px; font-size: 11px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">로드뷰</button>
-          </div>
+          <button onclick="saveSearchResultToTeam('${lat}', '${lng}', '${name.replace(/'/g, "\\'")}', '${address.replace(/'/g, "\\'")}')" 
+                  style="padding: 4px 8px; font-size: 11px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 4px;">저장</button>
           <button onclick="clearSearchResult()" 
                   style="position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: #dc2626; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 10px; line-height: 1; display: flex; align-items: center; justify-content: center;">×</button>
         </div>`
@@ -1562,88 +1475,6 @@
 
     document.getElementById('refreshBtn').addEventListener('click', () => {
       loadFromSheet();
-    });
-
-    // 로드뷰 관련 함수들
-    window.openRoadview = (lat, lng, name, address) => {
-      const modal = document.getElementById('roadviewModal');
-      const title = document.getElementById('roadviewTitle');
-      const container = document.getElementById('roadviewMap');
-      
-      title.textContent = `${name} - 로드뷰`;
-      modal.classList.add('show');
-      
-      // 기존 로드뷰 인스턴스 정리
-      if (roadviewInstance) {
-        roadviewInstance = null;
-      }
-      
-      // 컨테이너 초기화
-      container.innerHTML = '';
-      
-      try {
-        const position = new kakao.maps.LatLng(lat, lng);
-        
-        // 로드뷰 객체 생성
-        roadviewInstance = new kakao.maps.Roadview(container);
-        
-        // 로드뷰 클라이언트 객체 생성
-        const roadviewClient = new kakao.maps.RoadviewClient();
-        
-        // 좌표로 로드뷰를 표시할 수 있는지 확인
-        roadviewClient.getNearestPanoId(position, 50, function(panoId) {
-          if (panoId === null) {
-            container.innerHTML = `
-              <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666;">
-                <div style="font-size: 48px; margin-bottom: 20px;">📍</div>
-                <h3 style="color: #dc2626;">로드뷰를 사용할 수 없습니다</h3>
-                <p style="text-align: center; margin-bottom: 20px;">이 위치에서는 로드뷰가 제공되지 않습니다.<br>다른 지역을 검색해보세요.</p>
-                <button onclick="closeRoadview()" style="padding: 8px 16px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer;">닫기</button>
-              </div>
-            `;
-          } else {
-            roadviewInstance.setPanoId(panoId, position);
-          }
-        });
-        
-      } catch (error) {
-        console.error('로드뷰 로드 오류:', error);
-        container.innerHTML = `
-          <div style="display: flex; align-items: center; justify-content: center; height: 100%; flex-direction: column; color: #666;">
-            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
-            <h3 style="color: #dc2626;">로드뷰 로드 실패</h3>
-            <p style="text-align: center; margin-bottom: 20px;">로드뷰를 불러올 수 없습니다.<br>잠시 후 다시 시도해주세요.</p>
-            <button onclick="closeRoadview()" style="padding: 8px 16px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer;">닫기</button>
-          </div>
-        `;
-      }
-    };
-
-    window.closeRoadview = () => {
-      const modal = document.getElementById('roadviewModal');
-      modal.classList.remove('show');
-      
-      // 로드뷰 인스턴스 정리
-      if (roadviewInstance) {
-        roadviewInstance = null;
-      }
-    };
-
-    // ESC 키로 로드뷰 모달 닫기
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        const modal = document.getElementById('roadviewModal');
-        if (modal.classList.contains('show')) {
-          closeRoadview();
-        }
-      }
-    });
-
-    // 모달 배경 클릭으로 닫기
-    document.getElementById('roadviewModal').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) {
-        closeRoadview();
-      }
     });
 
     // 초기화
