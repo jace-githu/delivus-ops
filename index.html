@@ -899,9 +899,12 @@
       
       const markerPosition = new kakao.maps.LatLng(location.lat, location.lng);
       
+      // 고유 ID로 충돌 방지
+      const uniqueId = `pin-${location.id}-${Date.now()}`;
+      
       const overlay = new kakao.maps.CustomOverlay({
         position: markerPosition,
-        content: `<div style="
+        content: `<div id="${uniqueId}" style="
           background: #10b981; 
           border: 2px solid white; 
           border-radius: 50%; 
@@ -915,9 +918,11 @@
           font-weight: bold;
           box-shadow: 0 2px 6px rgba(0,0,0,0.3);
           cursor: pointer;
+          z-index: 100;
         " data-location-id="${location.id}">●</div>`,
         yAnchor: 0.5,
-        xAnchor: 0.5
+        xAnchor: 0.5,
+        clickable: true
       });
       overlay.setMap(map);
 
@@ -925,56 +930,111 @@
         content: `<div style="padding: 10px; font-size: 13px; white-space: nowrap; text-align: center;">
           <strong>${location.name}</strong><br>
           <small style="color: #666;">클릭하여 경로에 추가</small>
-        </div>`
+        </div>`,
+        removable: false
       });
 
-      setTimeout(() => {
-        const overlayElement = document.querySelector(`[data-location-id="${location.id}"]`);
+      // DOM에 추가된 후 이벤트 리스너 등록 (더 긴 지연시간)
+      const addEventListeners = () => {
+        const overlayElement = document.getElementById(uniqueId);
         if (overlayElement) {
-          overlayElement.addEventListener('click', () => {
-            handleSavedLocationClick(location);
-          });
+          // 기존 이벤트 리스너 제거 (중복 방지)
+          overlayElement.replaceWith(overlayElement.cloneNode(true));
+          const newElement = document.getElementById(uniqueId);
           
-          overlayElement.addEventListener('mouseenter', () => {
-            infowindow.setPosition(markerPosition);
-            infowindow.open(map);
-          });
-          
-          overlayElement.addEventListener('mouseleave', () => {
-            infowindow.close();
-          });
+          if (newElement) {
+            newElement.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('핀 클릭됨:', location.name);
+              handleSavedLocationClick(location);
+            });
+            
+            newElement.addEventListener('mouseenter', (e) => {
+              e.stopPropagation();
+              infowindow.setPosition(markerPosition);
+              infowindow.open(map);
+              newElement.style.transform = 'scale(1.1)';
+              newElement.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+            });
+            
+            newElement.addEventListener('mouseleave', (e) => {
+              e.stopPropagation();
+              infowindow.close();
+              newElement.style.transform = 'scale(1)';
+              newElement.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+            });
+            
+            console.log('이벤트 리스너 등록 완료:', location.name, uniqueId);
+          } else {
+            console.error('DOM 요소를 찾을 수 없음:', uniqueId);
+          }
+        } else {
+          console.error('오버레이 요소를 찾을 수 없음:', uniqueId);
         }
-      }, 100);
+      };
 
-      savedLocationMarkers.set(location.id, { overlay, infowindow });
+      // 여러 번 시도해서 확실히 등록
+      setTimeout(addEventListeners, 100);
+      setTimeout(addEventListeners, 300);
+      setTimeout(addEventListeners, 500);
+
+      savedLocationMarkers.set(location.id, { overlay, infowindow, uniqueId });
     }
 
     function handleSavedLocationClick(location) {
-      if (currentMode !== 'pin') return;
+      console.log('핸들러 호출됨:', location.name, '모드:', currentMode);
+      
+      if (currentMode !== 'pin') {
+        console.log('핀 클릭 모드가 아님, 무시');
+        return;
+      }
 
       const latlng = new kakao.maps.LatLng(location.lat, location.lng);
       
+      console.log('현재 waypoints 수:', waypoints.length, 'waypointMode:', waypointMode);
+      
       if (waypointMode === 'waypoint') {
         if (waypoints.length >= 2) {
+          console.log('경유지 추가');
           addWaypoint(latlng, location.name);
           waypointMode = 'auto';
           updateAddWaypointButton();
+        } else {
+          console.log('경유지 모드이지만 출발/도착지가 부족함');
         }
       } else {
         if (waypoints.length < 2) {
+          console.log('출발지 또는 도착지 추가');
+          addWaypoint(latlng, location.name);
+        } else {
+          console.log('이미 경로가 설정됨, 경유지로 추가');
           addWaypoint(latlng, location.name);
         }
       }
     }
 
     function displaySavedLocationMarkers() {
-      savedLocationMarkers.forEach(({ overlay, infowindow }) => {
+      console.log('마커 표시 시작, 위치 수:', savedLocations.length);
+      
+      // 기존 마커들 제거
+      savedLocationMarkers.forEach(({ overlay, infowindow, uniqueId }, locationId) => {
+        console.log('기존 마커 제거:', locationId);
         if (overlay) overlay.setMap(null);
         if (infowindow) infowindow.close();
+        // DOM 요소도 제거
+        if (uniqueId) {
+          const element = document.getElementById(uniqueId);
+          if (element) element.remove();
+        }
       });
       savedLocationMarkers.clear();
       
-      savedLocations.forEach(location => addSavedLocationMarker(location));
+      // 새 마커들 추가
+      savedLocations.forEach(location => {
+        console.log('마커 추가:', location.name);
+        addSavedLocationMarker(location);
+      });
     }
 
     function renderSavedLocations() {
@@ -1023,25 +1083,30 @@
     };
 
     window.addLocationToRoute = (id) => {
+      console.log('addLocationToRoute 호출됨:', id);
       const location = savedLocations.find(loc => loc.id === id);
-      if (!location) return;
+      if (!location) {
+        console.error('위치를 찾을 수 없음:', id);
+        return;
+      }
       
+      console.log('위치 찾음:', location.name);
       const latlng = new kakao.maps.LatLng(location.lat, location.lng);
       
       if (waypointMode === 'waypoint') {
         if (waypoints.length >= 2) {
+          console.log('경유지 추가 (버튼으로)');
           addWaypoint(latlng, location.name);
           waypointMode = 'auto';
           updateAddWaypointButton();
         }
       } else {
         if (waypoints.length < 2) {
+          console.log('출발/도착지 추가 (버튼으로)');
           addWaypoint(latlng, location.name);
         } else {
-          waypointMode = 'waypoint';
+          console.log('경로가 있어서 경유지로 추가 (버튼으로)');
           addWaypoint(latlng, location.name);
-          waypointMode = 'auto';
-          updateAddWaypointButton();
         }
       }
     };
