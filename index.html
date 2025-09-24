@@ -1,4 +1,15 @@
-<!DOCTYPE html>
+function displaySavedLocationMarkers() {
+      // 기존 마커들 제거
+      savedLocationMarkers.forEach(({ marker, overlay, infowindow }) => {
+        marker.setMap(null);
+        if (overlay) overlay.setMap(null);
+        if (infowindow) infowindow.close();
+      });
+      savedLocationMarkers.clear();
+      
+      // 새 마커들 추가
+      savedLocations.forEach(location => addSavedLocationMarker(location));
+    }<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
@@ -429,7 +440,7 @@
 </head>
 <body>
   <header>
-    <div class="title">📍 딜리래빗 간선비용 계산기</div>
+    <div class="title">딜리래빗 간선비용 계산기</div>
   </header>
 
   <div class="container">
@@ -440,7 +451,7 @@
         <span>팀 공유 위치 자동 로드 중...</span>
       </div>
 
-      <h3>🔍 위치 검색 및 저장</h3>
+      <h3>위치 검색 및 저장</h3>
       <div class="control search-container">
         <label>위치 검색 (주소, 건물명, 랜드마크 등)</label>
         <input type="text" id="searchInput" placeholder="예: 강남역, 서울시 강남구 테헤란로 152">
@@ -449,13 +460,13 @@
       <div class="hint">검색 후 결과를 클릭하면 지도에 표시됩니다. 저장하면 모든 팀원이 볼 수 있습니다.</div>
       
       <div class="control">
-        <button class="btn success" id="saveLocationBtn" disabled>💾 위치 저장 및 팀 공유</button>
+        <button class="btn success" id="saveLocationBtn" disabled>위치 저장 및 팀 공유</button>
       </div>
 
       <!-- 토글 형태로 변경된 팀 공유 위치 섹션 -->
       <div class="toggle-section">
         <div class="toggle-header" id="toggleHeader">
-          <h3>📌 저장된 핀 <button class="btn" id="refreshBtn" style="padding: 6px 10px; font-size: 11px;" onclick="event.stopPropagation();">🔄</button></h3>
+          <h3>저장된 핀 <button class="btn" id="refreshBtn" style="padding: 6px 10px; font-size: 11px;" onclick="event.stopPropagation();">새로고침</button></h3>
           <span class="toggle-arrow" id="toggleArrow">▼</span>
         </div>
         <div class="toggle-content" id="toggleContent">
@@ -465,14 +476,14 @@
         </div>
       </div>
 
-      <h3>🛣️ 경로 설정</h3>
+      <h3>경로 설정</h3>
       
       <!-- 모드 선택기 -->
       <div class="mode-selector">
         <div class="hint"><strong>설정 방법 선택:</strong></div>
         <div class="mode-buttons">
-          <div class="mode-btn active" id="pinMode">📍 핀 클릭</div>
-          <div class="mode-btn" id="mapMode">🗺️ 지도 클릭</div>
+          <div class="mode-btn active" id="pinMode">핀 클릭</div>
+          <div class="mode-btn" id="mapMode">지도 클릭</div>
         </div>
       </div>
 
@@ -498,13 +509,13 @@
 
       <div class="control">
         <div class="row3">
-          <button class="btn" id="addWaypointBtn">➕ 경유지</button>
-          <button class="btn" id="undoBtn">↶ 되돌리기</button>
-          <button class="btn danger" id="resetBtn">🗑️ 초기화</button>
+          <button class="btn" id="addWaypointBtn">경유지 추가</button>
+          <button class="btn" id="undoBtn">되돌리기</button>
+          <button class="btn danger" id="resetBtn">초기화</button>
         </div>
       </div>
 
-      <h3>💰 단가 모델</h3>
+      <h3>단가 모델</h3>
       <div class="row">
         <div class="control">
           <label>기본 요금(₩)</label>
@@ -542,18 +553,18 @@
       </div>
 
       <div class="distance-note">
-        <strong>📏 거리 계산 방식:</strong> 직선거리 × 도로거리 보정계수<br>
+        <strong>거리 계산 방식:</strong> 직선거리 × 도로거리 보정계수<br>
         보정계수 1.3은 일반적인 도시 도로의 우회율을 반영합니다.
       </div>
 
-      <h3>📋 경유지 목록</h3>
+      <h3>경유지 목록</h3>
       <div class="waypoints" id="wpList">경로를 설정하면 여기에 순서가 표시됩니다.</div>
 
-      <h3>💬 슬랙 공유</h3>
+      <h3>슬랙 공유</h3>
       <div class="slack">
         <div class="small">메시지 미리보기</div>
         <pre id="slackText" style="white-space: pre-wrap; margin:10px 0; font-size: 12px;"></pre>
-        <button class="btn primary" id="copyBtn">📋 메시지 복사</button>
+        <button class="btn primary" id="copyBtn">메시지 복사</button>
       </div>
     </section>
 
@@ -631,18 +642,18 @@
       
       if (waypointCount === 0) {
         nextAction.textContent = currentMode === 'pin' ? 
-          '📍 저장된 핀을 클릭하여 출발지 설정' : 
-          '🗺️ 지도를 클릭하여 출발지 설정';
+          '저장된 핀을 클릭하여 출발지 설정' : 
+          '지도를 클릭하여 출발지 설정';
       } else if (waypointCount === 1) {
         nextAction.textContent = currentMode === 'pin' ? 
-          '📍 저장된 핀을 클릭하여 도착지 설정' : 
-          '🗺️ 지도를 클릭하여 도착지 설정';
+          '저장된 핀을 클릭하여 도착지 설정' : 
+          '지도를 클릭하여 도착지 설정';
       } else if (waypointMode === 'waypoint') {
         nextAction.textContent = currentMode === 'pin' ? 
-          '📍 저장된 핀을 클릭하여 경유지 설정' : 
-          '🗺️ 지도를 클릭하여 경유지 설정';
+          '저장된 핀을 클릭하여 경유지 설정' : 
+          '지도를 클릭하여 경유지 설정';
       } else {
-        nextAction.textContent = '경로 설정 완료 ✅';
+        nextAction.textContent = '경로 설정 완료';
       }
     }
 
@@ -927,24 +938,34 @@
       
       const markerPosition = new kakao.maps.LatLng(location.lat, location.lng);
       
-      // 커스텀 마커 이미지 생성
-      const markerImageSrc = 'data:image/svg+xml;base64,' + btoa(`
-        <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 0C7.163 0 0 7.163 0 16C0 24.837 16 40 16 40S32 24.837 32 16C32 7.163 24.837 0 16 0Z" fill="#10b981"/>
-          <circle cx="16" cy="16" r="8" fill="white"/>
-          <text x="16" y="20" text-anchor="middle" font-size="12" fill="#10b981">📍</text>
-        </svg>
-      `);
-      
-      const imageSize = new kakao.maps.Size(32, 40);
-      const imageOption = {offset: new kakao.maps.Point(16, 40)};
-      const markerImage = new kakao.maps.MarkerImage(markerImageSrc, imageSize, imageOption);
-      
+      // 기본 카카오맵 마커 사용 (더 안정적)
       const marker = new kakao.maps.Marker({ 
         position: markerPosition, 
-        map: map,
-        image: markerImage
+        map: map
       });
+
+      // 커스텀 오버레이로 핀 표시
+      const overlay = new kakao.maps.CustomOverlay({
+        position: markerPosition,
+        content: `<div style="
+          background: #10b981; 
+          border: 2px solid white; 
+          border-radius: 50%; 
+          width: 24px; 
+          height: 24px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          font-size: 12px; 
+          color: white;
+          font-weight: bold;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          cursor: pointer;
+        ">●</div>`,
+        yAnchor: 1.2,
+        xAnchor: 0.5
+      });
+      overlay.setMap(map);
 
       const infowindow = new kakao.maps.InfoWindow({
         content: `<div style="padding: 10px; font-size: 13px; white-space: nowrap; text-align: center;">
@@ -958,6 +979,24 @@
         handleSavedLocationClick(location);
       });
 
+      // 오버레이 클릭 이벤트는 DOM에 추가된 후 설정
+      setTimeout(() => {
+        const overlayElement = overlay.getContent();
+        if (typeof overlayElement === 'string') {
+          // DOM에서 해당 요소를 찾아 클릭 이벤트 추가
+          const overlayNodes = document.querySelectorAll('[style*="background: #10b981"]');
+          const targetNode = Array.from(overlayNodes).find(node => 
+            node.style.background === 'rgb(16, 185, 129)' || 
+            node.style.background === '#10b981'
+          );
+          if (targetNode) {
+            targetNode.addEventListener('click', () => {
+              handleSavedLocationClick(location);
+            });
+          }
+        }
+      }, 100);
+
       // 마우스 오버/아웃 이벤트
       kakao.maps.event.addListener(marker, 'mouseover', () => {
         infowindow.open(map, marker);
@@ -967,7 +1006,7 @@
         infowindow.close();
       });
 
-      savedLocationMarkers.set(location.id, { marker, infowindow });
+      savedLocationMarkers.set(location.id, { marker, overlay, infowindow });
     }
 
     function handleSavedLocationClick(location) {
@@ -1015,9 +1054,9 @@
             <div class="info">추가: ${createdBy} (${createdAt})</div>
           </div>
           <div class="actions">
-            <button class="btn" onclick="focusLocation('${loc.id}')" title="지도에서 찾기">🔍</button>
-            <button class="btn" onclick="addLocationToRoute('${loc.id}')" title="경로에 추가">➕</button>
-            <button class="btn danger" onclick="deleteLocation('${loc.id}')" title="삭제">🗑️</button>
+            <button class="btn" onclick="focusLocation('${loc.id}')" title="지도에서 찾기">찾기</button>
+            <button class="btn" onclick="addLocationToRoute('${loc.id}')" title="경로에 추가">추가</button>
+            <button class="btn danger" onclick="deleteLocation('${loc.id}')" title="삭제">삭제</button>
           </div>
         </div>`;
       }).join('');
@@ -1224,7 +1263,7 @@
         return;
       }
       const names = await Promise.all(waypoints.map((latlng, idx) => reverseName(latlng, idx)));
-      el.innerHTML = names.map((n,i)=> `<div style="margin-bottom: 6px;"><strong>${i===0?'🚀 출발':(i===1?'🏁 도착':'🛤️ 경유 '+(i-1))}</strong>: <code>${n}</code></div>`).join('');
+      el.innerHTML = names.map((n,i)=> `<div style="margin-bottom: 6px;"><strong>${i===0?'출발':(i===1?'도착':'경유 '+(i-1))}</strong>: <code>${n}</code></div>`).join('');
       renderSlack(names);
     }
 
@@ -1262,6 +1301,23 @@
     }
 
     function renderCost() {
+      // 보정계수가 변경되었을 때 거리를 다시 계산
+      if (waypoints.length >= 2) {
+        let totalDistance = 0;
+        for (let i = 1; i < waypoints.length; i++) {
+          const prevLatLng = waypoints[i-1];
+          const currLatLng = waypoints[i];
+          const distance = getDistanceFromLatLonInKm(
+            prevLatLng.getLat(), prevLatLng.getLng(),
+            currLatLng.getLat(), currLatLng.getLng()
+          );
+          totalDistance += distance;
+        }
+        const roadFactor = getNumber('roadFactor');
+        const adjustedDistance = totalDistance * roadFactor;
+        document.getElementById('km').textContent = adjustedDistance.toFixed(1);
+      }
+      
       const km = Number(document.getElementById('km').textContent) || 0;
       const cost = calcCost(km);
       document.getElementById('cost').textContent = cost.toLocaleString('ko-KR');
@@ -1298,8 +1354,8 @@
     document.getElementById('copyBtn').addEventListener('click', () => {
       const text = document.getElementById('slackText').textContent;
       navigator.clipboard.writeText(text).then(() => {
-        document.getElementById('copyBtn').textContent = '복사됨 ✅';
-        setTimeout(()=> document.getElementById('copyBtn').textContent = '📋 메시지 복사', 1500);
+        document.getElementById('copyBtn').textContent = '복사됨';
+        setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1500);
       }).catch(() => {
         const textArea = document.createElement('textarea');
         textArea.value = text;
@@ -1307,8 +1363,8 @@
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        document.getElementById('copyBtn').textContent = '복사됨 ✅';
-        setTimeout(()=> document.getElementById('copyBtn').textContent = '📋 메시지 복사', 1500);
+        document.getElementById('copyBtn').textContent = '복사됨';
+        setTimeout(()=> document.getElementById('copyBtn').textContent = '메시지 복사', 1500);
       });
     });
 
