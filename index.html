@@ -864,18 +864,17 @@
       const marker = new kakao.maps.Marker({ 
         position: markerPosition, 
         map: map,
-        // 검색 결과 마커는 다른 색상으로 구분
+        // 검색 결과 마커 크기 조정
         image: new kakao.maps.MarkerImage(
           'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
-          new kakao.maps.Size(30, 42)
+          new kakao.maps.Size(20, 28)
         )
       });
 
       const infowindow = new kakao.maps.InfoWindow({
-        content: `<div style="padding: 8px; font-size: 12px; white-space: nowrap; text-align: center;">
+        content: `<div style="padding: 8px 24px 8px 8px; font-size: 12px; white-space: nowrap; position: relative;">
           <div style="font-weight: bold;">${name}</div>
-          <small style="color: #666;">검색 결과</small><br>
-          <button onclick="clearSearchResult()" style="margin-top: 4px; padding: 2px 6px; font-size: 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">닫기</button>
+          <button onclick="clearSearchResult()" style="position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: #dc2626; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 10px; line-height: 1; display: flex; align-items: center; justify-content: center;">×</button>
         </div>`
       });
       infowindow.open(map, marker);
