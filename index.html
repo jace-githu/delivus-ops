@@ -943,6 +943,9 @@
         removable: false
       });
 
+      let hoverTimeout = null;
+      let isInfoWindowOpen = false;
+
       // 이벤트 리스너 추가
       markerElement.addEventListener('click', (e) => {
         e.preventDefault();
@@ -951,12 +954,27 @@
       });
       
       markerElement.addEventListener('mouseenter', () => {
-        infowindow.setPosition(markerPosition);
-        infowindow.open(map);
+        if (hoverTimeout) clearTimeout(hoverTimeout);
+        if (!isInfoWindowOpen) {
+          hoverTimeout = setTimeout(() => {
+            infowindow.setPosition(markerPosition);
+            infowindow.open(map);
+            isInfoWindowOpen = true;
+          }, 150); // 약간의 지연으로 깜빡임 방지
+        }
       });
       
       markerElement.addEventListener('mouseleave', () => {
-        infowindow.close();
+        if (hoverTimeout) {
+          clearTimeout(hoverTimeout);
+          hoverTimeout = null;
+        }
+        if (isInfoWindowOpen) {
+          setTimeout(() => {
+            infowindow.close();
+            isInfoWindowOpen = false;
+          }, 200); // 정보창에 마우스를 올릴 시간 제공
+        }
       });
 
       savedLocationMarkers.set(location.id, { overlay, infowindow, element: markerElement });
